@@ -83,6 +83,23 @@ class Settings(BaseSettings):
     llm_extraction_enabled: bool = Field(default=False, alias="LLM_EXTRACTION_ENABLED")
     llm_unknown_extraction_enabled: bool = Field(default=True, alias="LLM_UNKNOWN_EXTRACTION_ENABLED")
 
+    # ── RAG / Embeddings ──────────────────────────────────────────────────────
+    embedding_model: str = Field(default="BAAI/bge-base-en-v1.5", alias="EMBEDDING_MODEL")
+    embedding_batch_size: int = Field(default=32, alias="EMBEDDING_BATCH_SIZE")
+    chunk_size_chars: int = Field(default=600, alias="CHUNK_SIZE_CHARS")
+    chunk_overlap_chars: int = Field(default=120, alias="CHUNK_OVERLAP_CHARS")
+    section_detection_enabled: bool = Field(default=True, alias="SECTION_DETECTION_ENABLED")
+    retrieval_top_k: int = Field(default=8, alias="RETRIEVAL_TOP_K")
+    retrieval_min_score: float = Field(default=0.35, alias="RETRIEVAL_MIN_SCORE")
+
+    # ── Drafting / Preference Learning ────────────────────────────────────────
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    draft_model: str = Field(default="gemini-2.5-flash", alias="DRAFT_MODEL")
+    draft_max_chunks: int = Field(default=10, alias="DRAFT_MAX_CHUNKS")
+    draft_max_tokens: int = Field(default=2000, alias="DRAFT_MAX_TOKENS")
+    preference_dedup_threshold: float = Field(default=0.85, alias="PREFERENCE_DEDUP_THRESHOLD")
+    preference_max_per_draft: int = Field(default=5, alias="PREFERENCE_MAX_PER_DRAFT")
+
     # ── Email Ingestion (optional) ────────────────────────────────────────────
     email_imap_host:               str = Field(default="", alias="EMAIL_IMAP_HOST")
     email_imap_port:               int = Field(default=993, alias="EMAIL_IMAP_PORT")
@@ -110,7 +127,7 @@ class Settings(BaseSettings):
         return list(v)
 
     @model_validator(mode="after")
-    def validate_runtime_warnings(self) -> "Settings":
+    def validate_runtime_warnings(self) -> Settings:
         if self.llm_extraction_enabled and not os.environ.get("ANTHROPIC_API_KEY"):
             warnings.warn(
                 "LLM_EXTRACTION_ENABLED=true but ANTHROPIC_API_KEY is not set. "

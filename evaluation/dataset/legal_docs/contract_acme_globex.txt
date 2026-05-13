@@ -1,0 +1,11 @@
+RECITALS
+This services agreement is entered into by Acme Corp and Globex Inc.
+
+PAYMENT TERMS
+Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice.
+
+GOVERNING LAW
+This agreement is governed by the laws of New York and venue shall lie in New York County.
+
+TERMINATION
+Either party may terminate this agreement on thirty days written notice.

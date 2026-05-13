@@ -139,6 +139,16 @@ class PipelineService:
                 },
             )
 
+            try:
+                from app.workers.tasks import embed_document_task
+
+                embed_document_task.apply_async(args=[document.id], queue="documents.normal")
+            except Exception as embed_exc:
+                logger.warning(
+                    "embedding_enqueue_failed",
+                    extra={"document_id": document.id, "error": str(embed_exc)},
+                )
+
             return output
 
         except Exception as exc:

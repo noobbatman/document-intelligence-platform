@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.vector_types import EmbeddingVector, TextList
 
 
 def _utcnow() -> datetime:
@@ -59,6 +60,22 @@ class WebhookStatus(StrEnum):
     inactive = "inactive"
 
 
+class DraftType(StrEnum):
+    internal_memo       = "internal_memo"
+    case_fact_summary   = "case_fact_summary"
+    contract_summary    = "contract_summary"
+    notice_summary      = "notice_summary"
+    document_checklist  = "document_checklist"
+
+
+class DraftStatus(StrEnum):
+    generating = "generating"
+    draft      = "draft"
+    reviewed   = "reviewed"
+    approved   = "approved"
+    failed     = "failed"
+
+
 class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
@@ -92,6 +109,12 @@ class Document(Base):
         back_populates="document", cascade="all, delete-orphan"
     )
     audit_logs: Mapped[list[AuditLog]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    chunks: Mapped[list[DocumentChunk]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    draft_outputs: Mapped[list[DraftOutput]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
 
@@ -250,4 +273,94 @@ class POMatch(Base):
     match_score: Mapped[float] = mapped_column(Float, default=0.0)
     discrepancies: Mapped[list] = mapped_column(JSON, default=list)
     matched_fields: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class DocumentChunk(Base):
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        Index("ix_document_chunks_document_id", "document_id"),
+        Index("ix_document_chunks_document_chunk", "document_id", "chunk_index"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_number: Mapped[int] = mapped_column(Integer, default=1)
+    section_header: Mapped[str | None] = mapped_column(Text, nullable=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    char_start: Mapped[int] = mapped_column(Integer, nullable=False)
+    char_end: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(EmbeddingVector(768), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    document: Mapped[Document] = relationship(back_populates="chunks")
+
+
+class DraftOutput(Base):
+    __tablename__ = "draft_outputs"
+    __table_args__ = (
+        Index("ix_draft_outputs_document_id", "document_id"),
+        Index("ix_draft_outputs_tenant_id", "tenant_id"),
+        Index("ix_draft_outputs_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    draft_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default=DraftStatus.generating)
+    content: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    evidence_chunk_ids: Mapped[list[str]] = mapped_column(TextList, default=list)
+    generation_version: Mapped[int] = mapped_column(Integer, default=1)
+    word_count: Mapped[int] = mapped_column(Integer, default=0)
+    model_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    preferences_applied: Mapped[list[str]] = mapped_column(TextList, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    document: Mapped[Document] = relationship(back_populates="draft_outputs")
+    edits: Mapped[list[DraftEdit]] = relationship(
+        back_populates="draft", cascade="all, delete-orphan"
+    )
+
+
+class DraftEdit(Base):
+    __tablename__ = "draft_edits"
+    __table_args__ = (
+        Index("ix_draft_edits_draft_id", "draft_id"),
+        Index("ix_draft_edits_document_id", "document_id"),
+        Index("ix_draft_edits_processed", "processed"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    draft_id: Mapped[str] = mapped_column(ForeignKey("draft_outputs.id"), nullable=False)
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id"), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    section_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    original_content: Mapped[str] = mapped_column(Text, nullable=False)
+    edited_content: Mapped[str] = mapped_column(Text, nullable=False)
+    reviewer_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    processed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    draft: Mapped[DraftOutput] = relationship(back_populates="edits")
+
+
+class DraftPreference(Base):
+    __tablename__ = "draft_preferences"
+    __table_args__ = (
+        Index("ix_draft_preferences_tenant_type", "tenant_id", "document_type"),
+        Index("ix_draft_preferences_source_edit", "source_edit_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    tenant_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    document_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    preference_text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_edit_id: Mapped[str | None] = mapped_column(ForeignKey("draft_edits.id"), nullable=True)
+    embedding: Mapped[list[float]] = mapped_column(EmbeddingVector(768), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, default=0.8)
+    application_count: Mapped[int] = mapped_column(Integer, default=0)
+    effectiveness_score: Mapped[float] = mapped_column(Float, default=0.5)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

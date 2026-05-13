@@ -32,6 +32,9 @@ celery_app.conf.update(
     task_routes={
         "app.workers.tasks.process_document_task": {"queue": "documents.normal"},
         "app.workers.tasks.process_document_high_priority": {"queue": "documents.high"},
+        "app.workers.tasks.embed_document_task": {"queue": "documents.normal"},
+        "app.workers.tasks.generate_draft_task": {"queue": "documents.high"},
+        "app.workers.tasks.extract_preferences_task": {"queue": "documents.normal"},
         "app.workers.tasks.dispatch_webhook_task": {"queue": "webhooks"},
         "app.workers.tasks.batch_process_task": {"queue": "documents.normal"},
     },

@@ -21,6 +21,10 @@
 upload → OCR → classify → extract → line items → LLM enrich → validate → score → review → export
 ```
 
+```
+legal doc → chunk → embed → retrieve evidence → Gemini 2.5 Flash draft → operator edit → learned preference
+```
+
 </div>
 
 ---
@@ -107,6 +111,28 @@ observability, and all 110 test cases.
 | **Macro-average F1** | | | **0.905** |
 
 **Performance:** avg classification latency **0.49 ms** · avg document confidence **0.79**
+
+### Legal RAG + Drafting Evaluation
+
+> **Dataset:** 3 synthetic legal text fixtures and JSON ground-truth cases in
+> [`evaluation/dataset/legal_docs/`](evaluation/dataset/legal_docs/) and
+> [`evaluation/ground_truth/legal/`](evaluation/ground_truth/legal/).
+
+| Evaluation | Command | Result |
+|---|---|---|
+| Retrieval | `python evaluation/eval_retrieval.py evaluation/ground_truth/legal/retrieval_cases.json` | Recall@5 **1.000** · MRR **0.750** over 8 cases in the local hash-fallback run |
+| Draft groundedness | `python evaluation/eval_drafts.py evaluation/ground_truth/legal/draft_cases.json` | Groundedness **1.000** · unsupported honesty **1.000** · ROUGE-lite **0.681** |
+| Improvement loop | `python evaluation/eval_improvement.py evaluation/ground_truth/legal/improvement_cases.json` | edit rate **0.80 → 0.20**, relative drop **75%** |
+
+These are intentionally small, transparent synthetic checks rather than a
+claim of broad legal-domain performance. They verify the submission-critical
+flows: evidence retrieval, citation-grounded drafts, unsupported-section
+honesty, and measurable improvement after operator edits.
+
+Retrieval metrics were measured using `BAAI/bge-base-en-v1.5` embeddings. If
+the model is not installed, `eval_retrieval.py` falls back to a deterministic
+hash-based embedder which can produce strong scores on lexically clean test
+cases but does not reflect production retrieval quality.
 
 ---
 
@@ -195,6 +221,35 @@ PostgreSQL · Redis · Local/S3 Storage
   ▼
 Prometheus · Grafana · Celery Flower · Streamlit Review UI
 ```
+
+### Legal RAG + Drafting
+
+The legal drafting layer adds:
+
+- `document_chunks` with pgvector embeddings for section-aware legal text chunks
+- `draft_outputs` for generated legal prose with evidence chunk IDs
+- `draft_edits` for operator corrections
+- `draft_preferences` for learned reusable drafting rules
+
+Draft generation uses **Gemini 2.5 Flash** (`DRAFT_MODEL=gemini-2.5-flash`) and
+retrieves document evidence before generation. The model is instructed to cite
+source pages inline and to mark missing information as `[UNSUPPORTED: reason]`
+instead of inferring.
+
+### Improvement Loop
+
+```mermaid
+flowchart LR
+  A["Generated draft"] --> B["Operator edits section"]
+  B --> C["DraftEdit stored"]
+  C --> D["extract_preferences_task"]
+  D --> E["Reusable DraftPreference"]
+  E --> F["Injected into future drafts"]
+```
+
+This closes the loop between review and future generation: edits become
+tenant-scoped preferences that are applied to later drafts of the same document
+type.
 
 ---
 

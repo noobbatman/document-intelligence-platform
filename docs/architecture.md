@@ -201,3 +201,46 @@ Document confidence combines:
 - OCR quality estimate
 
 Low-confidence fields are routed to review when confidence is below the configurable threshold.
+
+## 8. Legal RAG and Drafting Layer
+
+The platform now adds a legal RAG layer on top of the existing extraction
+pipeline:
+
+1. OCR text is chunked with section-aware boundaries.
+2. Chunks are embedded locally with `BAAI/bge-base-en-v1.5`.
+3. pgvector stores embeddings in `document_chunks`.
+4. Draft-specific retrieval queries gather evidence chunks.
+5. Gemini 2.5 Flash generates structured draft sections with inline page
+   citations and evidence chunk IDs.
+
+Drafts are stored in `draft_outputs`, with statuses for `generating`, `draft`,
+`reviewed`, and `approved`.
+
+## 9. Improvement Loop
+
+The improvement loop is:
+
+```text
+operator edits draft section
+  -> DraftEdit row is stored
+  -> extract_preferences_task runs asynchronously
+  -> Gemini extracts one reusable preference
+  -> preference is embedded and deduplicated
+  -> future drafts for the same tenant/document type inject that preference
+```
+
+This is a real feedback loop rather than a version diff: future generations use
+the learned preference text and few-shot edit examples, and every draft records
+which preference IDs were applied.
+
+## 10. RAG API Surface
+
+- `POST /api/v1/documents/{id}/drafts`
+- `GET /api/v1/documents/{id}/drafts`
+- `GET /api/v1/documents/{id}/drafts/{draft_id}`
+- `PUT /api/v1/documents/{id}/drafts/{draft_id}`
+- `GET /api/v1/documents/{id}/drafts/{draft_id}/evidence`
+- `GET /api/v1/preferences`
+- `DELETE /api/v1/preferences/{id}`
+- `GET /api/v1/analytics/draft-improvement`

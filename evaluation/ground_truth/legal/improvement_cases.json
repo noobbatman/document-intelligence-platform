@@ -1,0 +1,16 @@
+{
+  "before": [
+    {"section_key": "payment_terms", "edited": true},
+    {"section_key": "governing_law", "edited": true},
+    {"section_key": "termination", "edited": true},
+    {"section_key": "required_actions", "edited": true},
+    {"section_key": "holding", "edited": false}
+  ],
+  "after": [
+    {"section_key": "payment_terms", "edited": false},
+    {"section_key": "governing_law", "edited": false},
+    {"section_key": "termination", "edited": true},
+    {"section_key": "required_actions", "edited": false},
+    {"section_key": "holding", "edited": false}
+  ]
+}

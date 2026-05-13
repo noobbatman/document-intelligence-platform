@@ -187,6 +187,26 @@
               <div class="card"><div class="card-title">Document types</div><div class="chart-wrap"><canvas id="chart-types"></canvas></div></div>
             </div>
             <div class="card mt-20"><div class="card-title">Fields with most corrections</div><div class="chart-wrap"><canvas id="chart-corrections"></canvas></div></div>
+            <div class="card mt-20">
+              <div class="card-title">Learned draft preferences</div>
+              <div class="table-wrap" x-show="preferences.length">
+                <table>
+                  <thead><tr><th>Preference</th><th>Type</th><th>Uses</th><th>Score</th><th style="width:80px"></th></tr></thead>
+                  <tbody>
+                    <template x-for="p in preferences" :key="p.id">
+                      <tr>
+                        <td x-text="p.preference_text"></td>
+                        <td class="mono text-sm" x-text="p.document_type"></td>
+                        <td x-text="p.application_count"></td>
+                        <td x-text="p.effectiveness_score != null ? fmtConf(p.effectiveness_score) : '—'"></td>
+                        <td><button class="btn btn-sm btn-danger" @click="deletePreference(p.id)">&times;</button></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <div class="empty" x-show="!preferences.length"><span class="text-muted">No learned preferences yet.</span></div>
+            </div>
           </div>
         </template>
       </div>
@@ -224,6 +244,52 @@
                   </template>
                 </div>
               </div>
+            </div>
+            <div class="card mt-20">
+              <div class="card-title">Drafts</div>
+              <div class="filter-bar" style="padding:0;margin-bottom:12px">
+                <select class="input input-sm" x-model="draftType">
+                  <option value="internal_memo">Internal memo</option>
+                  <option value="case_fact_summary">Case fact summary</option>
+                  <option value="contract_summary">Contract summary</option>
+                  <option value="notice_summary">Notice summary</option>
+                  <option value="document_checklist">Document checklist</option>
+                </select>
+                <button class="btn btn-primary btn-sm" @click="generateDraft()" :disabled="draftLoading">Generate</button>
+                <button class="btn btn-sm" @click="loadDrafts()" :disabled="draftLoading">&#8635;</button>
+              </div>
+              <template x-if="draftLoading"><div class="empty"><div class="spinner"></div></div></template>
+              <template x-if="!draftLoading && drafts.length">
+                <div style="display:flex;flex-direction:column;gap:16px">
+                  <template x-for="draft in drafts" :key="draft.id">
+                    <div class="review-panel" style="display:block">
+                      <div class="flex items-center gap-8 mb-12" style="justify-content:space-between">
+                        <div><span class="mono text-sm" x-text="draft.draft_type"></span> <span class="badge" :class="draft.status === 'draft' ? 'badge-success' : 'badge-warn'" x-text="draft.status"></span></div>
+                        <span class="text-sm text-muted" x-text="draft.word_count + ' words'"></span>
+                      </div>
+                      <template x-for="section in (draft.content?.sections || [])" :key="section.key">
+                        <div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:10px">
+                          <div class="flex items-center gap-8" style="justify-content:space-between">
+                            <div class="card-title" x-text="section.title"></div>
+                            <span class="badge" :class="section.confidence === 'high' ? 'badge-success' : (section.confidence === 'unsupported' ? 'badge-error' : 'badge-warn')" x-text="section.confidence"></span>
+                          </div>
+                          <p style="white-space:pre-wrap;line-height:1.55" x-text="section.content"></p>
+                          <details x-show="section.evidence_chunk_ids?.length">
+                            <summary class="text-sm text-muted">Evidence</summary>
+                            <div class="snippet mt-12" x-text="section.evidence_chunk_ids?.join(', ')"></div>
+                          </details>
+                          <div class="form-group mt-16" x-show="draftEditKey === draft.id + ':' + section.key">
+                            <textarea class="input w-full" rows="5" x-model="draftEditedContent"></textarea>
+                            <div class="flex gap-8 mt-12"><input class="input input-sm" placeholder="Reviewer name" x-model="draftReviewer"><button class="btn btn-primary btn-sm" @click="submitDraftEdit(draft, section)" :disabled="!draftReviewer.trim()">Submit edit</button><button class="btn btn-sm" @click="draftEditKey=''">Cancel</button></div>
+                          </div>
+                          <button class="btn btn-sm mt-12" x-show="draftEditKey !== draft.id + ':' + section.key" @click="startDraftEdit(draft, section)">Edit</button>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <div class="empty" x-show="!draftLoading && !drafts.length"><span class="text-muted">No drafts yet.</span></div>
             </div>
           </div>
         </template>

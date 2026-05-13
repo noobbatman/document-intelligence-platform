@@ -42,6 +42,11 @@ dependencies = [
   # Observability
   "prometheus-client>=0.20.0",
   "python-json-logger>=2.0.7",
+  "sentence-transformers>=3.0.0",
+  "pgvector>=0.3.0",
+  "tiktoken>=0.7.0",
+  "langdetect>=1.0.9",
+  "google-genai>=1.0.0",
   # UI
   "streamlit>=1.38.0",
   "requests>=2.32.3",

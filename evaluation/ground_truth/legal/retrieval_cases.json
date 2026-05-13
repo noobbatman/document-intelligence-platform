@@ -1,0 +1,146 @@
+[
+  {
+    "query": "governing law jurisdiction venue",
+    "chunks": [
+      {
+        "id": "contract-governing-law",
+        "text": "GOVERNING LAW This agreement is governed by the laws of New York and venue shall lie in New York County."
+      },
+      {
+        "id": "contract-payment",
+        "text": "PAYMENT TERMS Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice."
+      },
+      {
+        "id": "contract-termination",
+        "text": "TERMINATION Either party may terminate this agreement on thirty days written notice."
+      }
+    ],
+    "relevant_chunk_ids": ["contract-governing-law"]
+  },
+  {
+    "query": "payment terms amount thirty days invoice",
+    "chunks": [
+      {
+        "id": "contract-payment",
+        "text": "PAYMENT TERMS Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice."
+      },
+      {
+        "id": "contract-governing-law",
+        "text": "GOVERNING LAW This agreement is governed by the laws of New York and venue shall lie in New York County."
+      },
+      {
+        "id": "notice-response",
+        "text": "RESPONSE DEADLINE Northwind Traders must respond by May 20, 2026."
+      }
+    ],
+    "relevant_chunk_ids": ["contract-payment"]
+  },
+  {
+    "query": "required actions stop using mark remove materials",
+    "chunks": [
+      {
+        "id": "notice-actions",
+        "text": "REQUIRED ACTIONS Northwind Traders must stop using the ACME mark and remove infringing materials within ten days."
+      },
+      {
+        "id": "notice-deadline",
+        "text": "RESPONSE DEADLINE Northwind Traders must respond by May 20, 2026."
+      },
+      {
+        "id": "case-holding",
+        "text": "HOLDING The court held that Wayne Enterprises breached the agreement and awarded damages to Stark Industries."
+      }
+    ],
+    "relevant_chunk_ids": ["notice-actions"]
+  },
+  {
+    "query": "court holding breached agreement awarded damages",
+    "chunks": [
+      {
+        "id": "case-holding",
+        "text": "HOLDING The court held that Wayne Enterprises breached the agreement and awarded damages to Stark Industries."
+      },
+      {
+        "id": "case-issue",
+        "text": "LEGAL ISSUES Whether the defendant breached the supply agreement by failing to deliver conforming components."
+      },
+      {
+        "id": "contract-payment",
+        "text": "PAYMENT TERMS Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice."
+      }
+    ],
+    "relevant_chunk_ids": ["case-holding"]
+  },
+  {
+    "query": "termination thirty days written notice",
+    "chunks": [
+      {
+        "id": "contract-termination",
+        "text": "TERMINATION Either party may terminate this agreement on thirty days written notice."
+      },
+      {
+        "id": "contract-payment",
+        "text": "PAYMENT TERMS Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice."
+      },
+      {
+        "id": "notice-deadline",
+        "text": "RESPONSE DEADLINE Northwind Traders must respond by May 20, 2026."
+      }
+    ],
+    "relevant_chunk_ids": ["contract-termination"]
+  },
+  {
+    "query": "compensation schedule",
+    "chunks": [
+      {
+        "id": "retainer-remuneration",
+        "text": "REMUNERATION The client shall remit a fixed monthly retainer on the first business day of each month."
+      },
+      {
+        "id": "distractor-schedule",
+        "text": "SCHEDULE The hearing calendar lists depositions and discovery conferences for the next quarter."
+      },
+      {
+        "id": "distractor-compensation",
+        "text": "COMPENSATION SCHEDULE is a heading used here only to describe employee vacation planning, not payment obligations."
+      }
+    ],
+    "relevant_chunk_ids": ["retainer-remuneration"]
+  },
+  {
+    "query": "end the deal early",
+    "chunks": [
+      {
+        "id": "termination-without-keywords",
+        "text": "Either side may bring this arrangement to a close before the stated expiry by giving written notice thirty days in advance."
+      },
+      {
+        "id": "distractor-end-deal",
+        "text": "The end of the deal exhibit contains a marketing summary and no rights to close the arrangement before expiry."
+      },
+      {
+        "id": "notice-actions",
+        "text": "REQUIRED ACTIONS Northwind Traders must stop using the ACME mark and remove infringing materials within ten days."
+      }
+    ],
+    "relevant_chunk_ids": ["termination-without-keywords"]
+  },
+  {
+    "query": "payment obligation due date",
+    "chunks": [
+      {
+        "id": "lexical-distractor",
+        "text": "The phrase payment obligation due date appears in this glossary sentence but no party, amount, or deadline is stated."
+      },
+      {
+        "id": "semantic-payment",
+        "text": "Globex Inc shall remit $10,000 to Acme Corp no later than thirty days after receiving the invoice."
+      },
+      {
+        "id": "contract-governing-law",
+        "text": "GOVERNING LAW This agreement is governed by the laws of New York and venue shall lie in New York County."
+      }
+    ],
+    "relevant_chunk_ids": ["semantic-payment"]
+  }
+]

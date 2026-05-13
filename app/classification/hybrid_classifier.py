@@ -45,6 +45,23 @@ _KEYWORDS: dict[str, list[str]] = {
         "governing law", "termination", "indemnification", "warranty",
         "confidentiality", "intellectual property", "jurisdiction",
         "effective date", "obligations", "in witness whereof",
+        "witnesseth", "heretofore", "notwithstanding", "indemnify",
+        "licensor", "licensee", "arbitration", "consideration",
+    ],
+    "legal_notice": [
+        "notice", "cease and desist", "demand letter", "summons",
+        "subpoena", "response deadline", "required actions",
+        "issuing party", "receiving party", "non-compliance",
+    ],
+    "case_brief": [
+        "plaintiff", "defendant", "court", "holding", "legal issue",
+        "case number", "docket", "procedural history", "statute",
+        "precedent", "decision date", "jurisdiction",
+    ],
+    "affidavit": [
+        "affidavit", "affiant", "deponent", "sworn", "notary",
+        "notary public", "subscribed and sworn", "declarant",
+        "declaration", "under penalty of perjury",
     ],
 }
 
@@ -70,6 +87,27 @@ _PATTERNS: dict[str, list[str]] = {
         r"\bthis\s+agreement\b",
         r"\bin\s+witness\s+whereof\b",
         r"\bhereby\s+agrees?\b",
+        r"\bgoverning\s+law\b",
+        r"\bnotwithstanding\b",
+    ],
+    "legal_notice": [
+        r"\bcease\s+and\s+desist\b",
+        r"\bdemand\s+letter\b",
+        r"\bsummons\b",
+        r"\bsubpoena\b",
+        r"\bresponse\s+deadline\b",
+    ],
+    "case_brief": [
+        r"\bplaintiff\s+v\.?\s+defendant\b",
+        r"\bcase\s+(?:no\.?|number)\b",
+        r"\blegal\s+issues?\b",
+        r"\bholding\b",
+    ],
+    "affidavit": [
+        r"\baffidavit\s+of\b",
+        r"\bsubscribed\s+and\s+sworn\b",
+        r"\bnotary\s+public\b",
+        r"\bunder\s+penalty\s+of\s+perjury\b",
     ],
 }
 

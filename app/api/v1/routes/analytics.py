@@ -2,25 +2,35 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_dependency, get_optional_tenant, require_api_key
 from app.core.cache import get_cache
 from app.db.models import (
-    AuditLog, CorrectionRecord, Document, ExtractionResult, ReviewStatus, ReviewTask,
+    AuditLog,
+    CorrectionRecord,
+    Document,
+    DraftEdit,
+    DraftOutput,
+    DraftPreference,
+    ExtractionResult,
+    ReviewStatus,
+    ReviewTask,
 )
 from app.services.correction_service import CorrectionService
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
+TENANT_DEP = Depends(get_optional_tenant)
+DB_DEP = Depends(db_dependency)
 
 _CACHE_TTL = 30
 
 
 @router.get("/metrics/overview")
 def overview_metrics(
-    tenant_id: str | None = Depends(get_optional_tenant),
-    db: Session = Depends(db_dependency),
+    tenant_id: str | None = TENANT_DEP,
+    db: Session = DB_DEP,
 ) -> dict:
     cache_key = f"analytics:overview:{tenant_id or 'all'}"
     cache = get_cache()
@@ -86,8 +96,8 @@ def overview_metrics(
 
 @router.get("/metrics/ocr-distribution")
 def ocr_distribution(
-    tenant_id: str | None = Depends(get_optional_tenant),
-    db: Session = Depends(db_dependency),
+    tenant_id: str | None = TENANT_DEP,
+    db: Session = DB_DEP,
 ) -> dict:
     cache_key = f"analytics:ocr-dist:{tenant_id or 'all'}"
     cache = get_cache()
@@ -125,11 +135,11 @@ def ocr_distribution(
 
 @router.get("/corrections")
 def list_corrections(
-    tenant_id: str | None = Depends(get_optional_tenant),
+    tenant_id: str | None = TENANT_DEP,
     document_type: str | None = Query(default=None),
     field_name: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
-    db: Session = Depends(db_dependency),
+    db: Session = DB_DEP,
 ) -> list[dict]:
     svc = CorrectionService(db)
     return svc.export_corrections(
@@ -141,17 +151,17 @@ def list_corrections(
 
 @router.get("/corrections/stats")
 def correction_stats(
-    tenant_id: str | None = Depends(get_optional_tenant),
-    db: Session = Depends(db_dependency),
+    tenant_id: str | None = TENANT_DEP,
+    db: Session = DB_DEP,
 ) -> dict:
     return CorrectionService(db).correction_stats(tenant_id=tenant_id)
 
 
 @router.get("/audit/tenant")
 def tenant_audit(
-    tenant_id: str | None = Depends(get_optional_tenant),
+    tenant_id: str | None = TENANT_DEP,
     limit: int = Query(default=50, ge=1, le=500),
-    db: Session = Depends(db_dependency),
+    db: Session = DB_DEP,
 ) -> list[dict]:
     stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
     if tenant_id is None:
@@ -161,12 +171,100 @@ def tenant_audit(
     logs = list(db.scalars(stmt))
     return [
         {
-            "id": l.id,
-            "event_type": l.event_type,
-            "actor": l.actor,
-            "payload": l.payload,
-            "correlation_id": l.correlation_id,
-            "created_at": l.created_at.isoformat(),
+            "id": log.id,
+            "event_type": log.event_type,
+            "actor": log.actor,
+            "payload": log.payload,
+            "correlation_id": log.correlation_id,
+            "created_at": log.created_at.isoformat(),
         }
-        for l in logs
+        for log in logs
     ]
+
+
+@router.get("/draft-improvement")
+def draft_improvement(
+    tenant_id: str | None = TENANT_DEP,
+    db: Session = DB_DEP,
+) -> dict:
+    draft_filter = []
+    edit_filter = []
+    pref_filter = []
+    if tenant_id is None:
+        draft_filter.append(DraftOutput.tenant_id.is_(None))
+        edit_filter.append(DraftEdit.tenant_id.is_(None))
+        pref_filter.append(DraftPreference.tenant_id.is_(None))
+    else:
+        draft_filter.append(DraftOutput.tenant_id == tenant_id)
+        edit_filter.append(DraftEdit.tenant_id == tenant_id)
+        pref_filter.append(DraftPreference.tenant_id == tenant_id)
+
+    total_drafts = db.scalar(select(func.count(DraftOutput.id)).where(*draft_filter)) or 0
+    total_edits = db.scalar(select(func.count(DraftEdit.id)).where(*edit_filter)) or 0
+
+    draft_rows = db.execute(
+        select(cast(DraftOutput.created_at, Date), func.count(DraftOutput.id))
+        .where(*draft_filter)
+        .group_by(cast(DraftOutput.created_at, Date))
+    ).all()
+    edit_rows = db.execute(
+        select(cast(DraftEdit.created_at, Date), func.count(func.distinct(DraftEdit.draft_id)))
+        .where(*edit_filter)
+        .group_by(cast(DraftEdit.created_at, Date))
+    ).all()
+
+    drafts_by_period = {_period_key(period): count for period, count in draft_rows}
+    edits_by_period = {_period_key(period): count for period, count in edit_rows}
+
+    edit_rate_over_time = []
+    for period in sorted(set(drafts_by_period) | set(edits_by_period)):
+        drafts_generated = drafts_by_period.get(period, 0)
+        drafts_edited = edits_by_period.get(period, 0)
+        edit_rate_over_time.append(
+            {
+                "period": period,
+                "drafts_generated": drafts_generated,
+                "drafts_edited": drafts_edited,
+                "edit_rate": round(drafts_edited / drafts_generated, 4) if drafts_generated else 0.0,
+            }
+        )
+
+    edited_rows = db.execute(
+        select(DraftEdit.section_key, func.count(DraftEdit.id))
+        .where(*edit_filter)
+        .group_by(DraftEdit.section_key)
+        .order_by(func.count(DraftEdit.id).desc())
+        .limit(10)
+    ).all()
+    top_preferences = list(
+        db.scalars(
+            select(DraftPreference)
+            .where(*pref_filter)
+            .order_by(DraftPreference.application_count.desc(), DraftPreference.confidence.desc())
+            .limit(10)
+        )
+    )
+
+    return {
+        "edit_rate_over_time": edit_rate_over_time,
+        "top_preferences": [
+            {
+                "text": pref.preference_text,
+                "application_count": pref.application_count,
+                "effectiveness_score": pref.effectiveness_score,
+            }
+            for pref in top_preferences
+        ],
+        "most_edited_sections": [
+            {"section_key": section_key, "edit_count": count}
+            for section_key, count in edited_rows
+        ],
+        "preference_count": db.scalar(select(func.count(DraftPreference.id)).where(*pref_filter)) or 0,
+        "total_drafts": total_drafts,
+        "total_edits": total_edits,
+        "edit_rate": round(total_edits / total_drafts, 4) if total_drafts else 0.0,
+    }
+
+
+def _period_key(value) -> str:  # noqa: ANN001
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)

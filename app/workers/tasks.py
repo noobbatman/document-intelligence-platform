@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC
 from typing import Any
 
 import httpx
@@ -110,7 +111,7 @@ def batch_process_task(
     name="app.workers.tasks.dispatch_webhook_task",
 )
 def dispatch_webhook_task(self, webhook_id: str, event: str, payload: dict) -> dict:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.db.models import Webhook, WebhookStatus
 
@@ -130,7 +131,7 @@ def dispatch_webhook_task(self, webhook_id: str, event: str, payload: dict) -> d
             resp = client.post(webhook.url, content=body, headers=headers)
             resp.raise_for_status()
 
-        webhook.last_triggered_at = datetime.now(timezone.utc)
+        webhook.last_triggered_at = datetime.now(UTC)
         webhook.failure_count = 0
         db.commit()
         webhooks_dispatched_total.labels(event=event, success="true").inc()
@@ -214,3 +215,63 @@ def poll_email_task(self) -> dict:
         db.close()
 
     return {"enqueued": len(enqueued), "documents": enqueued}
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+    name="app.workers.tasks.embed_document_task",
+)
+def embed_document_task(self, document_id: str) -> dict:
+    from app.rag.embedding_service import EmbeddingService
+
+    db = SessionLocal()
+    try:
+        count = EmbeddingService().embed_document(document_id, db)
+        return {"document_id": document_id, "chunks": count}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 2},
+    name="app.workers.tasks.generate_draft_task",
+)
+def generate_draft_task(
+    self,
+    document_id: str,
+    draft_type: str,
+    tenant_id: str | None = None,
+    draft_id: str | None = None,
+) -> dict:
+    from app.rag.draft_service import DraftService
+
+    db = SessionLocal()
+    try:
+        draft = DraftService(db).generate(document_id, draft_type, tenant_id, draft_id=draft_id)
+        return {"document_id": document_id, "draft_id": draft.id, "status": draft.status}
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 2},
+    name="app.workers.tasks.extract_preferences_task",
+)
+def extract_preferences_task(self, edit_id: str) -> dict:
+    from app.rag.preference_service import PreferenceService
+
+    db = SessionLocal()
+    try:
+        pref = PreferenceService(db).extract_from_edit(edit_id)
+        return {"edit_id": edit_id, "preference_id": pref.id if pref else None}
+    finally:
+        db.close()

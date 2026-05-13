@@ -77,11 +77,19 @@ document.addEventListener('alpine:init', () => {
       analyticsMetrics: null,
       ocrDist: null,
       corrStats: null,
+      preferences: [],
+      drafts: [],
+      draftType: 'internal_memo',
+      draftLoading: false,
+      draftReviewer: localStorage.getItem('di_draft_reviewer') || '',
+      draftEditKey: '',
+      draftEditedContent: '',
       _charts: {},
 
       async init() {
         this.$watch('apiKey', v => localStorage.setItem('di_api_key', v));
         this.$watch('reviewerName', v => localStorage.setItem('di_reviewer', v));
+        this.$watch('draftReviewer', v => localStorage.setItem('di_draft_reviewer', v));
         this._go('dashboard');
       },
 
@@ -195,15 +203,19 @@ document.addEventListener('alpine:init', () => {
         this.selDoc = doc;
         this.selResult = null;
         this.selHistory = [];
+        this.drafts = [];
+        this.draftEditKey = '';
         this.showModal = true;
         this.modalLoading = true;
         try {
-          const [res, hist] = await Promise.all([
+          const [res, hist, drafts] = await Promise.all([
             this._fetch(`/documents/${doc.id}/result`).catch(() => null),
             this._fetch(`/documents/${doc.id}/history`).catch(() => []),
+            this._fetch(`/documents/${doc.id}/drafts`).catch(() => []),
           ]);
           this.selResult = res;
           this.selHistory = Array.isArray(hist) ? hist : [];
+          this.drafts = Array.isArray(drafts) ? drafts : [];
         } catch (_) {
         }
         this.modalLoading = false;
@@ -212,6 +224,57 @@ document.addEventListener('alpine:init', () => {
       closeModal() {
         this.showModal = false;
         this.selDoc = null;
+        this.drafts = [];
+      },
+
+      async loadDrafts() {
+        if (!this.selDoc) return;
+        this.draftLoading = true;
+        try {
+          this.drafts = await this._fetch(`/documents/${this.selDoc.id}/drafts`) || [];
+        } catch (e) {
+          alert('Draft load failed: ' + e.message);
+        }
+        this.draftLoading = false;
+      },
+
+      async generateDraft() {
+        if (!this.selDoc || this.draftLoading) return;
+        this.draftLoading = true;
+        try {
+          await this._fetch(`/documents/${this.selDoc.id}/drafts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ draft_type: this.draftType }),
+          });
+          await this.loadDrafts();
+        } catch (e) {
+          alert('Draft generation failed: ' + e.message);
+        }
+        this.draftLoading = false;
+      },
+
+      startDraftEdit(draft, section) {
+        this.draftEditKey = draft.id + ':' + section.key;
+        this.draftEditedContent = section.content || '';
+      },
+
+      async submitDraftEdit(draft, section) {
+        if (!this.selDoc || !this.draftReviewer.trim()) return;
+        try {
+          await this._fetch(`/documents/${this.selDoc.id}/drafts/${draft.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              reviewer_name: this.draftReviewer.trim(),
+              sections: [{ key: section.key, edited_content: this.draftEditedContent }],
+            }),
+          });
+          this.draftEditKey = '';
+          await this.loadDrafts();
+        } catch (e) {
+          alert('Draft edit failed: ' + e.message);
+        }
       },
 
       async deleteDoc(id) {
@@ -278,19 +341,31 @@ document.addEventListener('alpine:init', () => {
         this.analyticsLoading = true;
         this.analyticsError = '';
         try {
-          const [m, ocr, corr] = await Promise.all([
+          const [m, ocr, corr, prefs] = await Promise.all([
             this._fetch('/analytics/metrics/overview'),
             this._fetch('/analytics/metrics/ocr-distribution'),
             this._fetch('/analytics/corrections/stats'),
+            this._fetch('/preferences').catch(() => []),
           ]);
           this.analyticsMetrics = m;
           this.ocrDist = ocr;
           this.corrStats = corr;
+          this.preferences = Array.isArray(prefs) ? prefs : [];
           this.$nextTick(() => this._renderCharts());
         } catch (e) {
           this.analyticsError = e.message;
         }
         this.analyticsLoading = false;
+      },
+
+      async deletePreference(id) {
+        if (!confirm('Delete this learned preference?')) return;
+        try {
+          await this._fetch(`/preferences/${id}`, { method: 'DELETE' });
+          this.preferences = this.preferences.filter(p => p.id !== id);
+        } catch (e) {
+          alert('Delete failed: ' + e.message);
+        }
       },
 
       _renderCharts() {
