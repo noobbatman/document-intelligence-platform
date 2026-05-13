@@ -1,14 +1,22 @@
 """SQLAlchemy ORM models — all timestamps are timezone-aware UTC."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import (
-    JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer,
-    String, Text, UniqueConstraint,
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,7 +25,7 @@ from app.db.vector_types import EmbeddingVector, TextList
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class DocumentStatus(StrEnum):

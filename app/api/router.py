@@ -1,8 +1,15 @@
 from fastapi import APIRouter
 
 from app.api.v1.routes import (
-    analytics, deduplication, documents, drafts,
-    exports, health, po_matching, reviews, webhooks,
+    analytics,
+    deduplication,
+    documents,
+    drafts,
+    exports,
+    health,
+    po_matching,
+    reviews,
+    webhooks,
 )
 
 api_router = APIRouter()

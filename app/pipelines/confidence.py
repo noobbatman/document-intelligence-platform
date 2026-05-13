@@ -120,7 +120,8 @@ _FIELD_VALIDATORS: dict[str, Any] = {
     "jury_demand": lambda v: 0.8 if isinstance(v, bool) else 0.0,
 }
 
-_DEFAULT_VALIDATOR = lambda v: 0.7 if v not in (None, "", []) else 0.0
+def _DEFAULT_VALIDATOR(value: Any) -> float:
+    return 0.7 if value not in (None, "", []) else 0.0
 
 
 def _cross_field_consistency(fields: dict[str, Any]) -> dict[str, float]:
