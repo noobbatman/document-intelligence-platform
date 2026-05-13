@@ -13,4 +13,3 @@ class DocumentClassifier(ABC):
     @abstractmethod
     def classify(self, text: str) -> ClassificationResult:
         raise NotImplementedError
-

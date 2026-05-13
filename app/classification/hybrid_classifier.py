@@ -16,102 +16,26 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from app.classification.base import ClassificationResult, DocumentClassifier
+from app.utils.config_loader import load_config
 
 # ── Vocabulary ────────────────────────────────────────────────────────────────
 
+_CONFIG_PATH = Path(__file__).with_name("document_types.yaml")
+_DOCUMENT_TYPES: dict[str, dict[str, Any]] = load_config(str(_CONFIG_PATH))
 _KEYWORDS: dict[str, list[str]] = {
-    "invoice": [
-        "invoice", "bill to", "invoice number", "amount due", "tax",
-        "subtotal", "due date", "purchase order", "remit to", "net 30",
-        "payment terms", "line item", "qty", "unit price", "total due",
-        "vat", "billed to", "invoice date",
-    ],
-    "bank_statement": [
-        "statement period", "account number", "opening balance",
-        "closing balance", "debits", "credits", "available balance",
-        "transaction date", "reference number", "sort code", "iban",
-        "monthly statement", "statement date",
-    ],
-    "receipt": [
-        "receipt", "thank you for your purchase", "total paid",
-        "change due", "cashier", "payment method", "items purchased",
-        "amount tendered",
-    ],
-    "contract": [
-        "agreement", "whereas", "hereby", "party", "parties",
-        "governing law", "termination", "indemnification", "warranty",
-        "confidentiality", "intellectual property", "jurisdiction",
-        "effective date", "obligations", "in witness whereof",
-        "witnesseth", "heretofore", "notwithstanding", "indemnify",
-        "licensor", "licensee", "arbitration", "consideration",
-    ],
-    "legal_notice": [
-        "notice", "cease and desist", "demand letter", "summons",
-        "subpoena", "response deadline", "required actions",
-        "issuing party", "receiving party", "non-compliance",
-    ],
-    "case_brief": [
-        "plaintiff", "defendant", "court", "holding", "legal issue",
-        "case number", "docket", "procedural history", "statute",
-        "precedent", "decision date", "jurisdiction",
-    ],
-    "affidavit": [
-        "affidavit", "affiant", "deponent", "sworn", "notary",
-        "notary public", "subscribed and sworn", "declarant",
-        "declaration", "under penalty of perjury",
-    ],
+    label: list(config.get("keywords", []))
+    for label, config in _DOCUMENT_TYPES.items()
 }
-
 _PATTERNS: dict[str, list[str]] = {
-    "invoice": [
-        r"\binvoice\s*(?:no\.?|number|#)\s*[:\-]?\s*[A-Z0-9\-\/]+",
-        r"\bamount\s+due\b",
-        r"\btotal\s+due\b",
-        r"\bvat\s*\(\d+%\)",
-    ],
-    "bank_statement": [
-        r"\bstatement\s+(?:period|date)\b",
-        r"\b(?:opening|closing)\s+balance\b",
-        r"\bsort\s+code\s*[:\-]?\s*\d{2}[-\s]\d{2}[-\s]\d{2}",
-        r"\biban\s*[:\-]?\s*[A-Z]{2}\d{2}",
-    ],
-    "receipt": [
-        r"\breceip[t]?\b",
-        r"\btotal\s+paid\b",
-        r"\bchange\s+due\b",
-    ],
-    "contract": [
-        r"\bthis\s+agreement\b",
-        r"\bin\s+witness\s+whereof\b",
-        r"\bhereby\s+agrees?\b",
-        r"\bgoverning\s+law\b",
-        r"\bnotwithstanding\b",
-    ],
-    "legal_notice": [
-        r"\bcease\s+and\s+desist\b",
-        r"\bdemand\s+letter\b",
-        r"\bsummons\b",
-        r"\bsubpoena\b",
-        r"\bresponse\s+deadline\b",
-    ],
-    "case_brief": [
-        r"\bplaintiff\s+v\.?\s+defendant\b",
-        r"\bcase\s+(?:no\.?|number)\b",
-        r"\blegal\s+issues?\b",
-        r"\bholding\b",
-    ],
-    "affidavit": [
-        r"\baffidavit\s+of\b",
-        r"\bsubscribed\s+and\s+sworn\b",
-        r"\bnotary\s+public\b",
-        r"\bunder\s+penalty\s+of\s+perjury\b",
-    ],
+    label: list(config.get("patterns", []))
+    for label, config in _DOCUMENT_TYPES.items()
 }
 
-_IDF: dict[str, float] = {kw: math.log(4 / 1) for kws in _KEYWORDS.values() for kw in kws}
+_IDF: dict[str, float] = {kw: math.log(len(_KEYWORDS) / 1) for kws in _KEYWORDS.values() for kw in kws}
 
 # Minimum similarity threshold for fuzzy keyword matching (0-100)
 _FUZZY_THRESHOLD = 85
@@ -159,6 +83,19 @@ class HybridDocumentClassifier(DocumentClassifier):
         raw_score  = combined[best_label]
         total      = sum(combined.values()) or 1.0
         dominance = raw_score / total
+
+        if self._strong_legal_complaint_signal(lowered, keyword_scores, pattern_scores):
+            return ClassificationResult(
+                label="legal_complaint",
+                confidence=round(min(0.95, max(0.72, combined.get("legal_complaint", 0.0) / total + 0.45)), 4),
+                rationale={
+                    "keyword_scores": keyword_scores,
+                    "pattern_scores": pattern_scores,
+                    "fuzzy_scores":   fuzzy_scores,
+                    "combined_scores": combined,
+                    "override": "strong_legal_complaint_signal",
+                },
+            )
 
         if raw_score < 0.015 or dominance < 0.40:
             return ClassificationResult(
@@ -232,3 +169,29 @@ class HybridDocumentClassifier(DocumentClassifier):
                         break
 
         return dict(scores)
+
+    def _strong_legal_complaint_signal(
+        self,
+        text: str,
+        keyword_scores: dict[str, float],
+        pattern_scores: dict[str, float],
+    ) -> bool:
+        court_caption = bool(
+            re.search(r"\b(?:united\s+states\s+)?district\s+court\b", text)
+            or re.search(r"\bcivil\s+action\s+no\.?\b", text)
+            or re.search(r"\bcase\s+no\.?\b", text)
+        )
+        adversarial_caption = bool(
+            re.search(r"\bplaintiffs?\b.{0,160}\b(?:v\.?|vs\.?|ve)\b.{0,160}\bdefendants?\b", text)
+            or (text.count("plaintiff") >= 2 and text.count("defendant") >= 2)
+        )
+        complaint_body = bool(
+            re.search(r"\bcomplaint\b", text)
+            and (
+                re.search(r"\bcount\s+(?:i|ii|iii|iv|v|vi|vii|viii|ix|x|\d+)\b", text)
+                or re.search(r"\bprayer\s+for\s+relief\b", text)
+                or re.search(r"\bjury\s+trial\s+demand(?:ed)?\b", text)
+            )
+        )
+        legal_complaint_score = keyword_scores.get("legal_complaint", 0.0) + pattern_scores.get("legal_complaint", 0.0)
+        return court_caption and adversarial_caption and complaint_body and legal_complaint_score > 0.5

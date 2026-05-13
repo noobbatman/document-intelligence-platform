@@ -1,7 +1,8 @@
 """Webhook registration, dispatch, dead-letter, and replay service."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -79,7 +80,9 @@ class WebhookService:
         replayed: bool | None = None,
         limit: int = 100,
     ) -> list[FailedWebhookEvent]:
-        stmt = select(FailedWebhookEvent).order_by(FailedWebhookEvent.created_at.desc()).limit(limit)
+        stmt = (
+            select(FailedWebhookEvent).order_by(FailedWebhookEvent.created_at.desc()).limit(limit)
+        )
         if event:
             stmt = stmt.where(FailedWebhookEvent.event == event)
         if replayed is not None:
@@ -93,8 +96,10 @@ class WebhookService:
         if not failed:
             raise ValueError(f"FailedWebhookEvent {failed_id} not found.")
 
-        task = dispatch_webhook_task.apply_async(args=[failed.webhook_id, failed.event, failed.payload])
+        task = dispatch_webhook_task.apply_async(
+            args=[failed.webhook_id, failed.event, failed.payload]
+        )
         failed.replayed = True
-        failed.replayed_at = datetime.now(timezone.utc)
+        failed.replayed_at = datetime.now(UTC)
         self.db.commit()
         return {"task_id": str(task.id), "failed_event_id": failed_id}

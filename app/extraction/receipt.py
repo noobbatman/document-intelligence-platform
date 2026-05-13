@@ -1,4 +1,5 @@
 """Receipt extractor."""
+
 import re
 from typing import Any
 
@@ -17,13 +18,24 @@ class ReceiptExtractor(Extractor):
             r"(?:date|time)\s*[:#]?\s*([0-9]{1,2}[\s\/\-\.][A-Za-z]{3,9}[\s\/\-\.][0-9]{2,4}|[0-9]{1,2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{2,4})",
             text,
         )
-        receipt_number = regex_search(r"(?:receipt|txn|transaction)\s*(?:no\.?|#|number)?\s*[:#]?\s*([A-Z0-9\-]+)", text)
-        subtotal = normalize_amount(regex_search(r"subtotal\s*[:#]?\s*([$€£]?\s?[\d,]+\.\d{2})", text))
-        tax = normalize_amount(regex_search(r"(?:tax|vat|gst)[^\n]{0,30}?([$€£]?\s?[\d,]+\.\d{2})", text))
-        total = normalize_amount(
-            regex_search(r"(?:total(?:\s+paid)?|amount\s+paid|grand\s+total)\s*[:#]?\s*([$€£]?\s?[\d,]+\.\d{2})", text)
+        receipt_number = regex_search(
+            r"(?:receipt|txn|transaction)\s*(?:no\.?|#|number)?\s*[:#]?\s*([A-Z0-9\-]+)", text
         )
-        payment_method = regex_search(r"(?:paid\s+by|payment\s+method|tender)\s*[:#]?\s*([A-Za-z ]+)", text)
+        subtotal = normalize_amount(
+            regex_search(r"subtotal\s*[:#]?\s*([$€£]?\s?[\d,]+\.\d{2})", text)
+        )
+        tax = normalize_amount(
+            regex_search(r"(?:tax|vat|gst)[^\n]{0,30}?([$€£]?\s?[\d,]+\.\d{2})", text)
+        )
+        total = normalize_amount(
+            regex_search(
+                r"(?:total(?:\s+paid)?|amount\s+paid|grand\s+total)\s*[:#]?\s*([$€£]?\s?[\d,]+\.\d{2})",
+                text,
+            )
+        )
+        payment_method = regex_search(
+            r"(?:paid\s+by|payment\s+method|tender)\s*[:#]?\s*([A-Za-z ]+)", text
+        )
         cashier = regex_search(r"(?:cashier|served\s+by|operator)\s*[:#]?\s*([A-Za-z0-9 ]+)", text)
 
         fields: dict[str, Any] = {

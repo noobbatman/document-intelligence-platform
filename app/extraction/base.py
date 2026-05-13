@@ -18,4 +18,3 @@ class Extractor(ABC):
     @abstractmethod
     def extract(self, ocr_result: OCRResult) -> ExtractionOutput:
         raise NotImplementedError
-

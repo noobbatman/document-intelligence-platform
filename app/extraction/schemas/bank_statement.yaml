@@ -1,0 +1,11 @@
+{
+  "document_type": "bank_statement",
+  "llm_fill": true,
+  "fields": [
+    {"name": "account_number", "type": "string", "required": true, "description": "Account number", "patterns": ["account\\s+number\\s*[:#\\-]?\\s*([\\d\\-*X ]{4,30})"]},
+    {"name": "statement_period", "type": "string", "required": false, "description": "Statement period", "patterns": ["statement\\s+period\\s*[:#\\-]?\\s*([^\\n]{6,80})"]},
+    {"name": "opening_balance", "type": "number", "required": false, "description": "Opening balance", "patterns": ["opening\\s+balance\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]},
+    {"name": "closing_balance", "type": "number", "required": true, "description": "Closing balance", "patterns": ["closing\\s+balance\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]},
+    {"name": "available_balance", "type": "number", "required": false, "description": "Available balance", "patterns": ["available\\s+balance\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]}
+  ]
+}

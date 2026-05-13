@@ -29,6 +29,7 @@ _DATE_PATTERNS = [
 _DATE_RE = re.compile("|".join(_DATE_PATTERNS), re.IGNORECASE)
 _INVOICE_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9\-\/\._ ]{2,40}$", re.IGNORECASE)
 _ACCOUNT_RE = re.compile(r"^[\d\-\*X ]{4,30}$")
+_CASE_NUMBER_RE = re.compile(r"^[A-Z0-9][A-Z0-9:\-\/\.]{3,60}$", re.IGNORECASE)
 
 
 def _validate_date(value: Any) -> float:
@@ -52,6 +53,12 @@ def _validate_invoice_id(value: Any) -> float:
     return 1.0 if _INVOICE_ID_RE.match(str(value).strip()) else 0.4
 
 
+def _validate_case_number(value: Any) -> float:
+    if not value:
+        return 0.0
+    return 1.0 if _CASE_NUMBER_RE.match(str(value).strip()) else 0.4
+
+
 def _validate_account(value: Any) -> float:
     if not value:
         return 0.0
@@ -68,12 +75,20 @@ def _validate_period(value: Any) -> float:
     return 1.0 if (has_separator and has_dates) else (0.6 if has_dates else 0.3)
 
 
+def _validate_nonempty_text(value: Any) -> float:
+    return 0.8 if value and len(str(value)) > 2 else 0.0
+
+
+def _validate_nonempty_list(value: Any) -> float:
+    return 0.85 if isinstance(value, list) and len(value) > 0 else 0.0
+
+
 _FIELD_VALIDATORS: dict[str, Any] = {
     "invoice_number": _validate_invoice_id,
     "invoice_date": _validate_date,
     "due_date": _validate_date,
-    "vendor_name": lambda v: 0.8 if v and len(str(v)) > 2 else 0.0,
-    "customer_name": lambda v: 0.8 if v and len(str(v)) > 2 else 0.0,
+    "vendor_name": _validate_nonempty_text,
+    "customer_name": _validate_nonempty_text,
     "subtotal": _validate_amount,
     "tax": _validate_amount,
     "total_amount": _validate_amount,
@@ -87,9 +102,22 @@ _FIELD_VALIDATORS: dict[str, Any] = {
     "payment_method": lambda v: 0.8 if v and len(str(v)) > 1 else 0.0,
     "effective_date": _validate_date,
     "termination_date": _validate_date,
-    "party_a": lambda v: 0.8 if v and len(str(v)) > 2 else 0.0,
-    "party_b": lambda v: 0.8 if v and len(str(v)) > 2 else 0.0,
-    "governing_law": lambda v: 0.8 if v and len(str(v)) > 2 else 0.0,
+    "party_a": _validate_nonempty_text,
+    "party_b": _validate_nonempty_text,
+    "governing_law": _validate_nonempty_text,
+    "case_caption": _validate_nonempty_text,
+    "case_number": _validate_case_number,
+    "court": _validate_nonempty_text,
+    "plaintiffs": _validate_nonempty_list,
+    "defendants": _validate_nonempty_list,
+    "claims": _validate_nonempty_list,
+    "causes_of_action": _validate_nonempty_list,
+    "jurisdiction": _validate_nonempty_text,
+    "venue": _validate_nonempty_text,
+    "statutes": _validate_nonempty_list,
+    "relief_sought": _validate_nonempty_list,
+    "filing_date": _validate_date,
+    "jury_demand": lambda v: 0.8 if isinstance(v, bool) else 0.0,
 }
 
 _DEFAULT_VALIDATOR = lambda v: 0.7 if v not in (None, "", []) else 0.0

@@ -24,4 +24,3 @@ class LocalStorageProvider(StorageProvider):
         destination = self.settings.export_dir / f"{document_id}.json"
         destination.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return destination
-

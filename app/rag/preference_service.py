@@ -137,10 +137,19 @@ If the edit is too document-specific to generalize, respond: {{"preference": nul
             self.db.delete(preference)
             self.db.commit()
 
-    def update_effectiveness_after_review(self, draft: DraftOutput, *, edited: bool) -> None:
+    def update_effectiveness_after_review(
+        self, draft: DraftOutput, *, edited_section_keys: list[str]
+    ) -> None:
         if not draft.preferences_applied:
             return
-        delta = -0.05 if edited else 0.10
+        if not edited_section_keys:
+            delta = 0.10
+        else:
+            total_sections = len((draft.content or {}).get("sections", [])) or 1
+            edit_ratio = len(edited_section_keys) / total_sections
+            # Scale penalty by edit coverage so a single unrelated edit doesn't
+            # penalise every applied preference equally.
+            delta = -0.05 * edit_ratio
         prefs = list(
             self.db.scalars(
                 select(DraftPreference).where(DraftPreference.id.in_(draft.preferences_applied))

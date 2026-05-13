@@ -1,9 +1,9 @@
 """Unit tests for document extractors and the full pipeline output contract."""
+
 from __future__ import annotations
 
 import pytest
 
-from app.classification.hybrid_classifier import HybridDocumentClassifier
 from app.extraction.factory import get_extractor
 from app.ocr.base import OCRResult
 
@@ -35,7 +35,7 @@ class TestInvoiceExtractor:
 
     def test_missing_fields_are_none_not_missing(self) -> None:
         result = get_extractor("invoice").extract(_make_ocr("just some random text"))
-        assert "invoice_number" in result.fields   # key present, value may be None
+        assert "invoice_number" in result.fields  # key present, value may be None
         assert "total_amount" in result.fields
 
 
@@ -62,12 +62,7 @@ class TestReceiptExtractor:
         assert result.fields.get("total_amount") is not None
 
     def test_extracts_multiline_store_date_and_tax(self) -> None:
-        text = (
-            "BARDS QUILL\n"
-            "Date: 08 Jul 2024\n"
-            "VAT (20% incl.): 2.61\n"
-            "Total Paid: 15.00\n"
-        )
+        text = "BARDS QUILL\nDate: 08 Jul 2024\nVAT (20% incl.): 2.61\nTotal Paid: 15.00\n"
         result = get_extractor("receipt").extract(_make_ocr(text))
         assert result.fields.get("store_name") == "BARDS QUILL"
         assert result.fields.get("receipt_date") == "08 Jul 2024"
@@ -90,14 +85,17 @@ class TestUnknownExtractor:
 
 
 class TestExtractorFactory:
-    @pytest.mark.parametrize("doc_type,expected", [
-        ("invoice", "invoice"),
-        ("bank_statement", "bank_statement"),
-        ("receipt", "receipt"),
-        ("contract", "contract"),
-        ("unknown", "unknown"),
-        ("garbage_type", "unknown"),   # falls back gracefully
-    ])
+    @pytest.mark.parametrize(
+        "doc_type,expected",
+        [
+            ("invoice", "invoice"),
+            ("bank_statement", "bank_statement"),
+            ("receipt", "receipt"),
+            ("contract", "contract"),
+            ("unknown", "unknown"),
+            ("garbage_type", "unknown"),  # falls back gracefully
+        ],
+    )
     def test_factory_registry(self, doc_type: str, expected: str) -> None:
         result = get_extractor(doc_type).extract(_make_ocr(""))
         assert result.document_type == expected

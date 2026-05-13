@@ -1,0 +1,10 @@
+{
+  "draft_type": "document_summary",
+  "applicable_document_types": ["unknown", "invoice", "bank_statement", "receipt", "contract", "legal_notice", "legal_complaint", "case_brief", "affidavit"],
+  "defaults": {},
+  "sections": [
+    {"key": "overview", "title": "Overview", "required": true, "query": "document purpose parties dates obligations facts", "instruction": "Identify the apparent document type, purpose, parties, and key dates."},
+    {"key": "key_points", "title": "Key Points", "required": true, "query": "important obligations claims amounts deadlines relief", "instruction": "Summarize the most important source-supported points."},
+    {"key": "missing_information", "title": "Missing or Unsupported Information", "required": false, "query": "missing incomplete unsupported blank unclear", "instruction": "List important fields that are absent, unclear, or unsupported."}
+  ]
+}

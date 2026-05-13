@@ -1,9 +1,10 @@
 """FastAPI dependency injection helpers."""
+
 from __future__ import annotations
 
 from collections.abc import Generator
 
-from fastapi import Depends, Header, HTTPException, Security, status
+from fastapi import Header, HTTPException, Security, status
 from fastapi.security.api_key import APIKeyHeader
 from sqlalchemy.orm import Session
 

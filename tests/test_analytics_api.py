@@ -1,26 +1,41 @@
 """Tests for analytics, corrections, and tenant-scoped metrics."""
+
 from __future__ import annotations
+
 from app.db.models import (
-    Document, DocumentStatus, ExtractionResult,
-    ReviewTask, ReviewStatus, CorrectionRecord,
+    CorrectionRecord,
+    Document,
+    DocumentStatus,
+    ExtractionResult,
 )
 
 
 def _seed_doc(db, tenant=None):
     doc = Document(
-        filename="inv.pdf", stored_path="data/uploads/inv.pdf",
-        content_type="application/pdf", status=DocumentStatus.completed,
-        pipeline_version="0.2.0", tags={}, document_type="invoice",
-        document_confidence=0.82, tenant_id=tenant,
+        filename="inv.pdf",
+        stored_path="data/uploads/inv.pdf",
+        content_type="application/pdf",
+        status=DocumentStatus.completed,
+        pipeline_version="0.2.0",
+        tags={},
+        document_type="invoice",
+        document_confidence=0.82,
+        tenant_id=tenant,
     )
-    db.add(doc); db.flush()
-    db.add(ExtractionResult(
-        document_id=doc.id, ocr_text="Invoice INV-001",
-        raw_payload={}, normalized_payload={},
-        export_payload={"fields": {"invoice_number": "INV-001"}},
-        ocr_metadata={"page_count": 1, "average_confidence": 0.88, "engine": "tesseract"},
-        extraction_metadata={}, validation_results=[],
-    ))
+    db.add(doc)
+    db.flush()
+    db.add(
+        ExtractionResult(
+            document_id=doc.id,
+            ocr_text="Invoice INV-001",
+            raw_payload={},
+            normalized_payload={},
+            export_payload={"fields": {"invoice_number": "INV-001"}},
+            ocr_metadata={"page_count": 1, "average_confidence": 0.88, "engine": "tesseract"},
+            extraction_metadata={},
+            validation_results=[],
+        )
+    )
     db.commit()
     return doc
 
@@ -68,12 +83,17 @@ def test_corrections_empty(client):
 def test_corrections_stats(client, db_session):
     doc = _seed_doc(db_session)
     cr = CorrectionRecord(
-        document_id=doc.id, document_type="invoice", field_name="invoice_number",
-        original_value="INV-001", corrected_value="INV-002",
-        ocr_snippet="Invoice INV-001", reviewer_name="qa",
+        document_id=doc.id,
+        document_type="invoice",
+        field_name="invoice_number",
+        original_value="INV-001",
+        corrected_value="INV-002",
+        ocr_snippet="Invoice INV-001",
+        reviewer_name="qa",
         pipeline_version="0.2.0",
     )
-    db_session.add(cr); db_session.commit()
+    db_session.add(cr)
+    db_session.commit()
     r = client.get("/api/v1/analytics/corrections/stats")
     assert r.status_code == 200
     data = r.json()
@@ -84,20 +104,30 @@ def test_corrections_stats(client, db_session):
 def test_corrections_list_tenant_scoped(client, db_session):
     tenant_a_doc = _seed_doc(db_session, tenant="tenant-a")
     tenant_b_doc = _seed_doc(db_session, tenant="tenant-b")
-    db_session.add_all([
-        CorrectionRecord(
-            document_id=tenant_a_doc.id, document_type="invoice", field_name="invoice_number",
-            original_value="INV-001", corrected_value="INV-101",
-            ocr_snippet="Invoice INV-001", reviewer_name="qa-a",
-            pipeline_version="0.3.0",
-        ),
-        CorrectionRecord(
-            document_id=tenant_b_doc.id, document_type="invoice", field_name="invoice_number",
-            original_value="INV-001", corrected_value="INV-202",
-            ocr_snippet="Invoice INV-001", reviewer_name="qa-b",
-            pipeline_version="0.3.0",
-        ),
-    ])
+    db_session.add_all(
+        [
+            CorrectionRecord(
+                document_id=tenant_a_doc.id,
+                document_type="invoice",
+                field_name="invoice_number",
+                original_value="INV-001",
+                corrected_value="INV-101",
+                ocr_snippet="Invoice INV-001",
+                reviewer_name="qa-a",
+                pipeline_version="0.3.0",
+            ),
+            CorrectionRecord(
+                document_id=tenant_b_doc.id,
+                document_type="invoice",
+                field_name="invoice_number",
+                original_value="INV-001",
+                corrected_value="INV-202",
+                ocr_snippet="Invoice INV-001",
+                reviewer_name="qa-b",
+                pipeline_version="0.3.0",
+            ),
+        ]
+    )
     db_session.commit()
 
     r = client.get("/api/v1/analytics/corrections", headers={"X-Tenant-ID": "tenant-a"})
@@ -112,20 +142,30 @@ def test_corrections_list_tenant_scoped(client, db_session):
 def test_corrections_stats_tenant_scoped(client, db_session):
     tenant_a_doc = _seed_doc(db_session, tenant="tenant-a")
     tenant_b_doc = _seed_doc(db_session, tenant="tenant-b")
-    db_session.add_all([
-        CorrectionRecord(
-            document_id=tenant_a_doc.id, document_type="invoice", field_name="invoice_number",
-            original_value="INV-001", corrected_value="INV-101",
-            ocr_snippet="Invoice INV-001", reviewer_name="qa-a",
-            pipeline_version="0.3.0",
-        ),
-        CorrectionRecord(
-            document_id=tenant_b_doc.id, document_type="invoice", field_name="closing_balance",
-            original_value="100.00", corrected_value="120.00",
-            ocr_snippet="Closing balance 100.00", reviewer_name="qa-b",
-            pipeline_version="0.3.0",
-        ),
-    ])
+    db_session.add_all(
+        [
+            CorrectionRecord(
+                document_id=tenant_a_doc.id,
+                document_type="invoice",
+                field_name="invoice_number",
+                original_value="INV-001",
+                corrected_value="INV-101",
+                ocr_snippet="Invoice INV-001",
+                reviewer_name="qa-a",
+                pipeline_version="0.3.0",
+            ),
+            CorrectionRecord(
+                document_id=tenant_b_doc.id,
+                document_type="invoice",
+                field_name="closing_balance",
+                original_value="100.00",
+                corrected_value="120.00",
+                ocr_snippet="Closing balance 100.00",
+                reviewer_name="qa-b",
+                pipeline_version="0.3.0",
+            ),
+        ]
+    )
     db_session.commit()
 
     r = client.get("/api/v1/analytics/corrections/stats", headers={"X-Tenant-ID": "tenant-a"})

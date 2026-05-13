@@ -1,4 +1,5 @@
 """Tests for HTTP middleware: rate limiting and Prometheus metrics."""
+
 from __future__ import annotations
 
 import app.core.http_runtime as http_runtime

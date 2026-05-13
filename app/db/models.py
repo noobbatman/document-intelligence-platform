@@ -66,6 +66,7 @@ class DraftType(StrEnum):
     contract_summary    = "contract_summary"
     notice_summary      = "notice_summary"
     document_checklist  = "document_checklist"
+    affidavit_summary   = "affidavit_summary"
 
 
 class DraftStatus(StrEnum):

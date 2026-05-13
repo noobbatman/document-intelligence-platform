@@ -1,4 +1,5 @@
 """Review task service — list, decide, complete, record corrections."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -11,8 +12,12 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import get_settings
 from app.db.models import (
-    AuditEventType, Document, DocumentStatus,
-    ReviewDecision, ReviewStatus, ReviewTask,
+    AuditEventType,
+    Document,
+    DocumentStatus,
+    ReviewDecision,
+    ReviewStatus,
+    ReviewTask,
 )
 from app.schemas.review import ReviewDecisionCreate
 from app.services.audit_service import AuditService
@@ -38,6 +43,7 @@ class ReviewService:
             .where(ReviewTask.status == ReviewStatus.pending)
         )
         from app.db.models import Document as Doc
+
         stmt = stmt.where(Doc.deleted_at.is_(None))
         if tenant_id is None:
             stmt = stmt.where(Doc.tenant_id.is_(None))
@@ -110,7 +116,7 @@ class ReviewService:
 
         document = task.document
         corrected_val = payload.corrected_value.get("value")
-        original_val  = task.original_value.get("value")
+        original_val = task.original_value.get("value")
 
         # Update export payload
         if document.extraction_result:
@@ -132,7 +138,8 @@ class ReviewService:
 
             if field_confidences:
                 export_payload["document_confidence"] = round(
-                    sum(item.get("confidence", 0.0) for item in field_confidences) / len(field_confidences),
+                    sum(item.get("confidence", 0.0) for item in field_confidences)
+                    / len(field_confidences),
                     4,
                 )
                 document.document_confidence = export_payload["document_confidence"]
@@ -158,8 +165,7 @@ class ReviewService:
 
         # Auto-complete document when all tasks are resolved
         pending_count = sum(
-            1 for t in document.review_tasks
-            if t.status == ReviewStatus.pending and t.id != task.id
+            1 for t in document.review_tasks if t.status == ReviewStatus.pending and t.id != task.id
         )
         if pending_count == 0 and document.status == DocumentStatus.review_required:
             document.status = DocumentStatus.completed
@@ -169,11 +175,11 @@ class ReviewService:
             event_type=AuditEventType.review_decision_submitted,
             actor=payload.reviewer_name,
             payload={
-                "task_id":         task.id,
-                "field_name":      task.field_name,
-                "original_value":  original_val,
+                "task_id": task.id,
+                "field_name": task.field_name,
+                "original_value": original_val,
                 "corrected_value": corrected_val,
-                "value_changed":   str(corrected_val) != str(original_val),
+                "value_changed": str(corrected_val) != str(original_val),
             },
         )
         self.db.commit()

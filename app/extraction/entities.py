@@ -4,6 +4,7 @@ spaCy is optional: if the model is not installed the module falls back to
 regex-only extraction so the evaluation harness can run without installing
 the full NLP stack.
 """
+
 from __future__ import annotations
 
 import re
@@ -16,7 +17,9 @@ from app.ocr.base import OCRResult
 def _get_nlp():
     try:
         import spacy
+
         from app.core.config import get_settings
+
         model_name = get_settings().spacy_model
         try:
             return spacy.load(model_name)
@@ -44,7 +47,9 @@ def extract_entities(ocr_result: OCRResult) -> list[dict]:
     for match in re.findall(
         r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
         r"Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
-        r"\s+\d{1,2},?\s+\d{4}\b", text, re.IGNORECASE
+        r"\s+\d{1,2},?\s+\d{4}\b",
+        text,
+        re.IGNORECASE,
     )[:10]:
         entities.append({"label": "DATE", "text": match, "confidence": 0.80})
 

@@ -1,0 +1,14 @@
+{
+  "document_type": "invoice",
+  "llm_fill": true,
+  "fields": [
+    {"name": "invoice_number", "type": "string", "required": true, "description": "Invoice identifier", "patterns": ["invoice\\s*(?:no\\.?|number|#)\\s*[:#\\-]?\\s*([A-Z0-9\\-\\/\\.]+)"]},
+    {"name": "invoice_date", "type": "string", "required": false, "description": "Invoice date", "patterns": ["invoice\\s+date\\s*[:#\\-]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "due_date", "type": "string", "required": false, "description": "Payment due date", "patterns": ["due\\s+date\\s*[:#\\-]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "vendor_name", "type": "string", "required": false, "description": "Vendor or sender", "patterns": ["(?:from|vendor)\\s*[:#\\-]?\\s*([^\\n]{3,80})"]},
+    {"name": "customer_name", "type": "string", "required": false, "description": "Bill-to customer", "patterns": ["bill\\s+to\\s*[:#\\-]?\\s*([^\\n]{3,80})"]},
+    {"name": "subtotal", "type": "number", "required": false, "description": "Subtotal", "patterns": ["subtotal\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]},
+    {"name": "tax", "type": "number", "required": false, "description": "Tax", "patterns": ["tax\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]},
+    {"name": "total_amount", "type": "number", "required": true, "description": "Total due", "patterns": ["(?:total\\s+due|amount\\s+due|total)\\s*[:#\\-]?\\s*([$€£]?\\s?[\\d,]+(?:\\.\\d{2})?)"]}
+  ]
+}

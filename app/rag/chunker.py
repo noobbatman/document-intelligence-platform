@@ -24,6 +24,8 @@ _LEGAL_HEADER_RE = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+")
+_COURT_PAGE_MARKER_RE = re.compile(r"(?:[—-]\s*)?\bPage\s+(\d{1,4})\s+Case\b", re.IGNORECASE)
+_GENERIC_PAGE_MARKER_RE = re.compile(r"\bPage\s+(\d{1,4})(?:\s+of\s+\d{1,4})?\b", re.IGNORECASE)
 _ABBREVIATIONS = {
     "mr.",
     "mrs.",
@@ -174,7 +176,22 @@ class SectionAwareChunker:
         return bool(re.fullmatch(r"[A-Z]\.", match.group(1)))
 
     def _page_number(self, text: str, char_start: int) -> int:
-        return text[:char_start].count("\f") + 1
+        form_feed_page = text[:char_start].count("\f") + 1
+        marker_page = self._page_from_markers(text, char_start)
+        return max(form_feed_page, marker_page or 1)
+
+    def _page_from_markers(self, text: str, char_start: int) -> int | None:
+        prefix = text[:char_start]
+        page: int | None = None
+        for pattern in (_COURT_PAGE_MARKER_RE, _GENERIC_PAGE_MARKER_RE):
+            for match in pattern.finditer(prefix):
+                try:
+                    page = int(match.group(1))
+                except ValueError:
+                    continue
+            if page is not None:
+                return page
+        return None
 
     def _token_count(self, text: str) -> int:
         try:

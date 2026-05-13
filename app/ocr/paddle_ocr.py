@@ -2,7 +2,9 @@ from pathlib import Path
 
 import numpy as np
 
+from app.core.config import get_settings
 from app.ocr.base import OCRPage, OCRProvider, OCRResult, OCRWord
+from app.ocr.preprocessing import preprocess_for_ocr
 from app.utils.pdf import ensure_images
 from app.utils.text import normalize_whitespace
 
@@ -14,10 +16,19 @@ class PaddleOCRProvider(OCRProvider):
         self._engine = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
 
     def extract(self, path: str) -> OCRResult:
+        settings = get_settings()
         pages: list[OCRPage] = []
         all_text: list[str] = []
         all_confidences: list[float] = []
         for page_index, image in enumerate(ensure_images(Path(path)), start=1):
+            if settings.ocr_preprocess:
+                image = preprocess_for_ocr(
+                    image,
+                    deskew=settings.ocr_deskew,
+                    denoise=settings.ocr_denoise,
+                    enhance_contrast=settings.ocr_enhance_contrast,
+                    binarize=False,
+                )
             result = self._engine.ocr(np.asarray(image), cls=True)
             words: list[OCRWord] = []
             page_tokens: list[str] = []
@@ -40,7 +51,7 @@ class PaddleOCRProvider(OCRProvider):
             pages.append(OCRPage(page_number=page_index, text=page_text, words=words, confidence=page_conf))
         avg_conf = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
         return OCRResult(
-            text="\n".join(all_text),
+            text="\f".join(all_text),
             pages=pages,
             metadata={
                 "page_count": len(pages),
@@ -48,4 +59,3 @@ class PaddleOCRProvider(OCRProvider):
                 "engine": "paddleocr",
             },
         )
-

@@ -9,6 +9,7 @@ Fix (v0.3.1):
   - customer_name F1 was 0.77 because 'bill to' missed noisy variants.  Added
     'billed to', 'bi11 t0', 'sold to', and 'ship to' as aliases.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -29,17 +30,22 @@ class InvoiceExtractor(Extractor):
         text = ocr_result.text
 
         invoice_number = (
-            regex_search(r"inv(?:oice)?\s*(?:number|no\.?|#|num)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\._ ]{1,39})", text)
-            or regex_search(r"(?:l\s*N\s*V|lnv0ice|invoice)\s*N(?:o|0)\.?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)", text)
+            regex_search(
+                r"inv(?:oice)?\s*(?:number|no\.?|#|num)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/\._ ]{1,39})",
+                text,
+            )
+            or regex_search(
+                r"(?:l\s*N\s*V|lnv0ice|invoice)\s*N(?:o|0)\.?\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/]+)",
+                text,
+            )
             or regex_search(r"\b((?:INV|BILL|SI|REF|DOC)-\d{4}-\d+)\b", text)
         )
         if invoice_number:
             invoice_number = invoice_number.strip().upper()
 
-        raw_inv_date = (
-            regex_search(r"inv(?:oice)?\s+date\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text)
-            or regex_search(r"(?:dated?|date\s*issued)\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text)
-        )
+        raw_inv_date = regex_search(
+            r"inv(?:oice)?\s+date\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text
+        ) or regex_search(r"(?:dated?|date\s*issued)\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text)
         raw_due_date = regex_search(r"due\s+date\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text)
 
         invoice_date = parse_date(raw_inv_date) or raw_inv_date
@@ -72,14 +78,14 @@ class InvoiceExtractor(Extractor):
             or regex_search(r"(?<!\w)total\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text)
         )
 
-        raw_subtotal = (
-            regex_search(r"subt(?:otal)?\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text)
-            or regex_search(r"(?:net\s+amount|excl\.?\s+(?:vat|tax))\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text)
+        raw_subtotal = regex_search(
+            r"subt(?:otal)?\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text
+        ) or regex_search(
+            r"(?:net\s+amount|excl\.?\s+(?:vat|tax))\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text
         )
-        raw_tax = (
-            regex_search(r"(?:vat|tax|gst)\s*(?:\(\d+%\))?\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text)
-            or regex_search(r"TA\s*X\s+([\d,]+\.\d{2})", text)
-        )
+        raw_tax = regex_search(
+            r"(?:vat|tax|gst)\s*(?:\(\d+%\))?\s*[:#]?\s*([$€£GBP]?\s?[\d,]+\.\d{2})", text
+        ) or regex_search(r"TA\s*X\s+([\d,]+\.\d{2})", text)
 
         subtotal = parse_amount(raw_subtotal) or normalize_amount(raw_subtotal)
         tax = parse_amount(raw_tax) or normalize_amount(raw_tax)

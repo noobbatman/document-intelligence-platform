@@ -26,6 +26,7 @@ def get_engine() -> Engine:
 
     # Enforce UTC on every new connection (PostgreSQL)
     if not is_sqlite:
+
         @event.listens_for(engine, "connect")
         def set_timezone(dbapi_conn, _rec):  # noqa: ANN001
             with dbapi_conn.cursor() as cur:

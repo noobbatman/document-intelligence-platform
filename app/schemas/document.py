@@ -65,6 +65,7 @@ class ReprocessResponse(BaseModel):
 
 class DocumentListResponse(BaseModel):
     """Paginated document list — offset-based cursor."""
+
     items: list[DocumentRead]
     total: int
     limit: int

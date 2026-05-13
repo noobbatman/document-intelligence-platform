@@ -1,9 +1,11 @@
 """Prometheus metrics registry — all metrics used in the platform."""
+
 from prometheus_client import Counter, Gauge, Histogram
 
 
 def tenant_label(tenant_id: str | None) -> str:
     return tenant_id or "public"
+
 
 # ── Upload / processing ───────────────────────────────────────────────────────
 documents_uploaded_total = Counter(

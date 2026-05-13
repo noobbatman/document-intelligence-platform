@@ -1,4 +1,5 @@
 """S3 / MinIO storage provider."""
+
 from __future__ import annotations
 
 import json
@@ -67,6 +68,7 @@ class S3StorageProvider(StorageProvider):
     def download_to_tmp(self, stored_path: str) -> Path:
         """Download an S3 object to a local temp file and return its path."""
         import tempfile
+
         # stored_path looks like s3://bucket/key
         parts = stored_path.removeprefix("s3://").split("/", 1)
         bucket, key = parts[0], parts[1]

@@ -40,3 +40,15 @@ DRAFT_QUERIES: dict[str, list[str]] = {
     ],
 }
 
+DOCUMENT_TYPE_QUERIES: dict[str, list[str]] = {
+    "legal_complaint": [
+        "case caption plaintiffs defendants court case number",
+        "jurisdiction venue factual allegations",
+        "causes of action counts claims statutes",
+        "subpoena allegations bank records RFPA privacy claim",
+        "conspiracy allegations actors agreement overt acts",
+        "void subpoena improper service legal basis",
+        "prayer for relief damages declaratory injunctive relief",
+        "jury demand requested relief",
+    ],
+}

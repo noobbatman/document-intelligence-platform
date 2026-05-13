@@ -1,4 +1,5 @@
 """Test fixtures — in-memory SQLite, test client, seed helpers."""
+
 from __future__ import annotations
 
 import os
@@ -10,21 +11,23 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 _tmp = tempfile.mkdtemp(prefix="docintel-tests-")
-os.environ.update({
-    "DATABASE_URL":    f"sqlite:///{_tmp}/test.db",
-    "UPLOAD_DIR":      f"{_tmp}/uploads",
-    "EXPORT_DIR":      f"{_tmp}/exports",
-    "API_KEYS":        "",
-    "STORAGE_BACKEND": "local",
-    "RATE_LIMIT_ENABLED": "false",
-    "PIPELINE_VERSION": "0.3.0",
-})
+os.environ.update(
+    {
+        "DATABASE_URL": f"sqlite:///{_tmp}/test.db",
+        "UPLOAD_DIR": f"{_tmp}/uploads",
+        "EXPORT_DIR": f"{_tmp}/exports",
+        "API_KEYS": "",
+        "STORAGE_BACKEND": "local",
+        "RATE_LIMIT_ENABLED": "false",
+        "PIPELINE_VERSION": "0.3.0",
+    }
+)
 
-from app.api.deps import db_dependency     # noqa: E402
-from app.core.config import get_settings   # noqa: E402
-from app.db.base import Base               # noqa: E402
+from app.api.deps import db_dependency  # noqa: E402
+from app.core.config import get_settings  # noqa: E402
+from app.db.base import Base  # noqa: E402
 from app.db.session import SessionLocal, engine  # noqa: E402
-from app.main import app                   # noqa: E402
+from app.main import app  # noqa: E402
 
 get_settings.cache_clear()
 Base.metadata.create_all(bind=engine)

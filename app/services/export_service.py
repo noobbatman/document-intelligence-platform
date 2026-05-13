@@ -2,48 +2,49 @@
 
 One of the most-requested features: every commercial tool exports to CSV/Excel.
 """
+
 from __future__ import annotations
 
 import csv
 import io
 import json
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Document, DocumentStatus, ExtractionResult
+from app.db.models import Document, ExtractionResult
 
 
 def _flatten_fields(doc: Document, result: ExtractionResult | None) -> dict[str, Any]:
     """Flatten a document + extraction result into a single-row dict."""
     fields = result.export_payload.get("fields", {}) if result else {}
     return {
-        "document_id":           doc.id,
-        "filename":              doc.filename,
-        "document_type":         doc.document_type or "",
-        "status":                doc.status,
-        "document_confidence":   doc.document_confidence,
+        "document_id": doc.id,
+        "filename": doc.filename,
+        "document_type": doc.document_type or "",
+        "status": doc.status,
+        "document_confidence": doc.document_confidence,
         "classifier_confidence": doc.classifier_confidence,
-        "pipeline_version":      doc.pipeline_version,
-        "tenant_id":             doc.tenant_id or "",
-        "created_at":            doc.created_at.isoformat() if doc.created_at else "",
+        "pipeline_version": doc.pipeline_version,
+        "tenant_id": doc.tenant_id or "",
+        "created_at": doc.created_at.isoformat() if doc.created_at else "",
         # Extracted fields
-        "invoice_number":     fields.get("invoice_number", ""),
-        "invoice_date":       fields.get("invoice_date", ""),
-        "due_date":           fields.get("due_date", ""),
-        "vendor_name":        fields.get("vendor_name", ""),
-        "customer_name":      fields.get("customer_name", ""),
-        "subtotal":           fields.get("subtotal", ""),
-        "tax":                fields.get("tax", ""),
-        "total_amount":       fields.get("total_amount", ""),
-        "currency":           fields.get("currency", ""),
-        "account_number":     fields.get("account_number", ""),
-        "statement_period":   fields.get("statement_period", ""),
-        "opening_balance":    fields.get("opening_balance", ""),
-        "closing_balance":    fields.get("closing_balance", ""),
-        "available_balance":  fields.get("available_balance", ""),
+        "invoice_number": fields.get("invoice_number", ""),
+        "invoice_date": fields.get("invoice_date", ""),
+        "due_date": fields.get("due_date", ""),
+        "vendor_name": fields.get("vendor_name", ""),
+        "customer_name": fields.get("customer_name", ""),
+        "subtotal": fields.get("subtotal", ""),
+        "tax": fields.get("tax", ""),
+        "total_amount": fields.get("total_amount", ""),
+        "currency": fields.get("currency", ""),
+        "account_number": fields.get("account_number", ""),
+        "statement_period": fields.get("statement_period", ""),
+        "opening_balance": fields.get("opening_balance", ""),
+        "closing_balance": fields.get("closing_balance", ""),
+        "available_balance": fields.get("available_balance", ""),
     }
 
 
@@ -95,11 +96,10 @@ class ExportService:
         """Return XLSX bytes using openpyxl (optional dependency)."""
         try:
             import openpyxl
-            from openpyxl.styles import Font, PatternFill, Alignment
+            from openpyxl.styles import Alignment, Font, PatternFill
         except ImportError:
             raise RuntimeError(
-                "openpyxl is required for Excel export. "
-                "Install with: pip install openpyxl"
+                "openpyxl is required for Excel export. Install with: pip install openpyxl"
             )
 
         docs = self._query_documents(**filters)
@@ -114,7 +114,7 @@ class ExportService:
         # Header row styling
         header_fill = PatternFill("solid", fgColor="1F4E79")
         header_font = Font(color="FFFFFF", bold=True)
-        fieldnames   = list(rows[0].keys()) if rows else []
+        fieldnames = list(rows[0].keys()) if rows else []
 
         for col_idx, field in enumerate(fieldnames, 1):
             cell = ws.cell(row=1, column=col_idx, value=field.replace("_", " ").title())
@@ -147,12 +147,14 @@ class ExportService:
         output = []
         for doc in docs:
             payload = doc.extraction_result.export_payload if doc.extraction_result else {}
-            output.append({
-                "document_id":    doc.id,
-                "filename":       doc.filename,
-                "document_type":  doc.document_type,
-                "status":         doc.status,
-                "created_at":     doc.created_at.isoformat() if doc.created_at else None,
-                "export_payload": payload,
-            })
+            output.append(
+                {
+                    "document_id": doc.id,
+                    "filename": doc.filename,
+                    "document_type": doc.document_type,
+                    "status": doc.status,
+                    "created_at": doc.created_at.isoformat() if doc.created_at else None,
+                    "export_payload": payload,
+                }
+            )
         return json.dumps(output, indent=2).encode("utf-8")

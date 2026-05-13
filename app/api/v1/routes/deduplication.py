@@ -1,4 +1,5 @@
 """Duplicate detection and fraud check endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -24,8 +25,8 @@ def check_document(
     - risk_level (clean / low / medium / high)
     - findings list with type, severity, and detail per issue
     """
-    doc    = DocumentService(db).get_document(document_id, tenant_id=tenant_id)
-    svc    = DeduplicationService(db)
+    doc = DocumentService(db).get_document(document_id, tenant_id=tenant_id)
+    svc = DeduplicationService(db)
     report = svc.check(doc)
     return report
 

@@ -12,7 +12,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import get_settings
 from app.db.models import Document, DocumentChunk, DraftEdit, DraftOutput, DraftStatus
-from app.rag.draft_queries import DRAFT_QUERIES
+from app.rag.draft_queries import DOCUMENT_TYPE_QUERIES, DRAFT_QUERIES
+from app.rag.draft_template_loader import load_draft_template
 from app.rag.gemini_client import GeminiClient
 from app.rag.preference_service import PreferenceService
 from app.rag.retrieval_service import RetrievalService, RetrievedChunk
@@ -52,7 +53,7 @@ class DraftService:
             draft = self.create_placeholder(document.id, draft_type, tenant_id)
 
         try:
-            chunks = self._retrieve_for_draft(document.id, draft_type)
+            chunks = self._retrieve_for_draft(document.id, draft_type, document.document_type or "unknown")
             prefs = self.preferences.get_preferences_for_draft(
                 tenant_id=document.tenant_id,
                 document_type=document.document_type or "unknown",
@@ -164,7 +165,9 @@ class DraftService:
 
         draft.status = DraftStatus.reviewed
         draft.updated_at = datetime.now(UTC)
-        self.preferences.update_effectiveness_after_review(draft, edited=bool(edits))
+        self.preferences.update_effectiveness_after_review(
+            draft, edited_section_keys=[e.section_key for e in edits]
+        )
         if edits:
             draft.content = content
             draft.word_count = self._word_count(content)
@@ -198,20 +201,101 @@ class DraftService:
             raise HTTPException(status_code=404, detail="Document not found.")
         return document
 
-    def _retrieve_for_draft(self, document_id: str, draft_type: str) -> list[RetrievedChunk]:
+    def _retrieve_for_draft(self, document_id: str, draft_type: str, document_type: str = "unknown") -> list[RetrievedChunk]:
         by_id: dict[str, RetrievedChunk] = {}
-        for query in DRAFT_QUERIES.get(draft_type, [draft_type.replace("_", " ")]):
+        template = load_draft_template(draft_type)
+        section_queries = [
+            section.get("query")
+            for section in (template or {}).get("sections", [])
+            if section.get("query")
+        ]
+        queries = section_queries or [
+            *DRAFT_QUERIES.get(draft_type, [draft_type.replace("_", " ")]),
+            *DOCUMENT_TYPE_QUERIES.get(document_type, []),
+        ]
+        candidate_limit = max(self.settings.draft_max_chunks * 5, 30)
+        for query in queries:
             for chunk in self.retrieval.retrieve(
                 document_id,
                 query,
-                top_k=self.settings.draft_max_chunks,
+                top_k=candidate_limit,
                 min_score=0.0,
                 session=self.db,
             ):
                 current = by_id.get(chunk.chunk_id)
                 if current is None or chunk.similarity_score > current.similarity_score:
                     by_id[chunk.chunk_id] = chunk
-        return sorted(by_id.values(), key=lambda item: item.similarity_score, reverse=True)[: self.settings.draft_max_chunks]
+        for chunk in self._keyword_support_chunks(document_id, draft_type, document_type):
+            by_id.setdefault(chunk.chunk_id, chunk)
+        return self._select_diverse_chunks(list(by_id.values()))
+
+    def _keyword_support_chunks(self, document_id: str, draft_type: str, document_type: str) -> list[RetrievedChunk]:
+        template = load_draft_template(draft_type) or {}
+        override = template.get("document_type_overrides", {}).get(document_type, {})
+        terms = [
+            *template.get("support_terms", []),
+            *override.get("support_terms", []),
+        ]
+        if not terms:
+            return []
+        limit_per_term = int(override.get("support_limit_per_term") or template.get("support_limit_per_term") or 3)
+        chunks: list[RetrievedChunk] = []
+        seen: set[str] = set()
+        for term in terms:
+            matches = list(
+                self.db.scalars(
+                    select(DocumentChunk)
+                    .where(DocumentChunk.document_id == document_id)
+                    .where(DocumentChunk.text.ilike(f"%{term}%"))
+                    .order_by(DocumentChunk.chunk_index.asc())
+                    .limit(limit_per_term)
+                )
+            )
+            for chunk in matches:
+                if chunk.id in seen:
+                    continue
+                seen.add(chunk.id)
+                chunks.append(
+                    RetrievedChunk(
+                        chunk_id=chunk.id,
+                        document_id=chunk.document_id,
+                        chunk_index=chunk.chunk_index,
+                        page_number=chunk.page_number,
+                        section_header=chunk.section_header,
+                        text=chunk.text,
+                        similarity_score=0.5,
+                    )
+                )
+        return chunks
+
+    def _select_diverse_chunks(self, candidates: list[RetrievedChunk]) -> list[RetrievedChunk]:
+        if len(candidates) <= self.settings.draft_max_chunks:
+            return sorted(candidates, key=lambda item: item.similarity_score, reverse=True)
+
+        ranked = sorted(candidates, key=lambda item: item.similarity_score, reverse=True)
+        selected: list[RetrievedChunk] = []
+        selected_ids: set[str] = set()
+        window_counts: dict[int, int] = {}
+
+        def window_for(chunk: RetrievedChunk) -> int:
+            return max(0, chunk.chunk_index) // 20
+
+        for chunk in ranked:
+            window = window_for(chunk)
+            if window_counts.get(window, 0) >= 2:
+                continue
+            selected.append(chunk)
+            selected_ids.add(chunk.chunk_id)
+            window_counts[window] = window_counts.get(window, 0) + 1
+            if len(selected) >= self.settings.draft_max_chunks:
+                return selected
+
+        for chunk in ranked:
+            if chunk.chunk_id not in selected_ids:
+                selected.append(chunk)
+                if len(selected) >= self.settings.draft_max_chunks:
+                    break
+        return selected
 
     def _system_prompt(self, draft_type: str, prefs: list[Any], examples: list[tuple[str, str]]) -> str:
         preference_block = ""
@@ -224,6 +308,8 @@ class DraftService:
                 f"{original}\n\n[HOW OPERATOR CORRECTED IT]\n{edited}"
             )
 
+        draft_date = self._draft_date()
+        template_rules = self._template_default_rules(draft_type)
         return f"""You are a legal document analyst for Pearson Specter Litt. Your task is to produce a {draft_type} based strictly on the provided source material.
 
 STRICT GROUNDING RULES:
@@ -231,6 +317,9 @@ STRICT GROUNDING RULES:
 2. If information needed for a section is not present in the source material, write "[UNSUPPORTED: {{reason}}]" rather than inferring or hallucinating.
 3. Do not draw on general legal knowledge to fill gaps. Only use what the documents contain.
 4. Use formal legal memo style.
+5. If the draft needs a memo date, use exactly this date: {draft_date}. Do not invent filing, review, or memo dates.
+6. Normalize obvious OCR artifacts only when the intended term is clear from context; for example, use "Landmark Credit Union" when OCR shows "Iandmark Credit Union".
+{template_rules}
 {preference_block}
 
 Respond in JSON with this structure:
@@ -250,12 +339,62 @@ Respond in JSON with this structure:
             )
             for idx, chunk in enumerate(chunks, 1)
         )
+        template_instructions = self._template_instructions(draft_type, document.document_type or "unknown")
         return (
             f"DOCUMENT TYPE: {document.document_type or 'unknown'}\n"
+            f"DRAFT DATE: {self._draft_date()}\n"
             f"STRUCTURED FIELDS EXTRACTED: {json.dumps(structured_fields, default=str)}\n\n"
+            f"{template_instructions}\n\n"
             f"SOURCE CHUNKS (ordered by relevance):\n---\n{chunk_block}\n---\n\n"
             f"Generate a {draft_type} for this document."
         )
+
+    def _template_default_rules(self, draft_type: str) -> str:
+        template = load_draft_template(draft_type) or {}
+        defaults = template.get("defaults", {})
+        if not defaults:
+            return ""
+        resolved = {
+            key: (self._draft_date() if value == "{{draft_date}}" else value)
+            for key, value in defaults.items()
+        }
+        lines = ["", "TEMPLATE DEFAULT RULES:"]
+        for key, value in resolved.items():
+            lines.append(f"- Use {key.upper()}: {value}.")
+        lines.append("- Treat template defaults as metadata, not document facts; do not mark them unsupported only because they are absent from the source.")
+        return "\n".join(lines)
+
+    def _template_instructions(self, draft_type: str, document_type: str) -> str:
+        template = load_draft_template(draft_type)
+        if not template:
+            return "DRAFT TEMPLATE: No external template found; use the requested draft type."
+        applicable = template.get("applicable_document_types", [])
+        applicability = (
+            f"Applicable to {document_type}."
+            if not applicable or document_type in applicable
+            else f"Template is not explicitly listed for {document_type}; use it as a best-effort fallback."
+        )
+        lines = [f"DRAFT TEMPLATE: {template.get('draft_type', draft_type)}. {applicability}"]
+        defaults = template.get("defaults", {})
+        if defaults:
+            resolved = {
+                key: (self._draft_date() if value == "{{draft_date}}" else value)
+                for key, value in defaults.items()
+            }
+            lines.append(f"Defaults: {json.dumps(resolved, default=str)}")
+        lines.append("Required section plan:")
+        for section in template.get("sections", []):
+            required = "required" if section.get("required") else "optional"
+            lines.append(
+                f"- {section.get('title', section.get('key'))} ({required}): "
+                f"{section.get('instruction', '')}"
+            )
+        override = template.get("document_type_overrides", {}).get(document_type, {})
+        if override.get("instructions"):
+            lines.append(f"{document_type} instructions:")
+            for instruction in override["instructions"]:
+                lines.append(f"- {instruction}")
+        return "\n".join(lines)
 
     def _normalize_content(self, payload: dict[str, Any]) -> dict[str, Any]:
         sections = payload.get("sections", [])
@@ -285,3 +424,7 @@ Respond in JSON with this structure:
 
     def _word_count(self, content: dict[str, Any]) -> int:
         return sum(len(str(section.get("content", "")).split()) for section in content.get("sections", []))
+
+    def _draft_date(self) -> str:
+        now = datetime.now(UTC)
+        return f"{now:%B} {now.day}, {now:%Y}"

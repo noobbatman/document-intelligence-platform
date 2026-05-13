@@ -15,17 +15,33 @@ class ContractExtractor(Extractor):
         effective_date = regex_search(
             r"effective\s+(?:as\s+of\s+)?date\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text
         )
+        # Stop before " and <Capital>" to avoid capturing Party B text.
         party_a = regex_search(
-            r"(?:between|party\s+a|first\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+)", text
+            r"(?:between|party\s+a|first\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+?)(?=\s+and\s+[A-Z]|\s*,\s*a\s+[A-Za-z]|$)",
+            text,
         )
+        # Standard executive agreement preamble: (the "Company"), and Kristin Scott (the "Executive").
         party_b = regex_search(
-            r"(?:and|party\s+b|second\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+)", text
+            r'["”]\s*\)\s*,?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(',
+            text,
+        ) or regex_search(
+            r"(?:corporation|company|llc|inc|ltd)[^,\n]{0,30},?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*[,\(]",
+            text,
+        ) or regex_search(
+            r"(?:party\s+b|second\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+)", text
         )
+        # "governed by … laws of the State of Ohio" — span up to 120 chars after "governed by".
         governing_law = regex_search(
-            r"governing\s+law\s*[:#]?\s*(?:shall\s+be\s+)?(?:the\s+laws?\s+of\s+)?([A-Za-z ,]+)", text
+            r"governed\s+by[^.]{0,120}?(?:laws?\s+of\s+(?:the\s+)?(?:state\s+of\s+)?|state\s+of\s+)([A-Z][A-Za-z ]+?)(?=[\.,;\n])",
+            text,
+        ) or regex_search(
+            r"state\s+of\s+([A-Z][A-Za-z]+)(?=[^\w])",
+            text,
         )
+        # Only match when a date value (containing digits) follows the heading.
         termination_date = regex_search(
-            r"termination\s+date\s*[:#]?\s*([A-Za-z0-9,\-\/ ]+)", text
+            r"[Tt]ermination\s+[Dd]ate\s*[:#]?\s*((?:[A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}))",
+            text,
         )
         contract_value = regex_search(
             r"(?:contract\s+value|total\s+value|consideration)\s*[:#]?\s*([$€£]?\s?[\d,]+(?:\.\d{2})?)", text

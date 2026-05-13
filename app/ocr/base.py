@@ -34,9 +34,7 @@ class OCRResult:
         if pages is None:
             page_words = words or []
             avg_conf = (
-                sum(word.confidence for word in page_words) / len(page_words)
-                if page_words
-                else 0.0
+                sum(word.confidence for word in page_words) / len(page_words) if page_words else 0.0
             )
             pages = [
                 OCRPage(

@@ -12,4 +12,3 @@ class StorageProvider(ABC):
     @abstractmethod
     def write_export(self, document_id: str, payload: dict) -> Path:
         raise NotImplementedError
-

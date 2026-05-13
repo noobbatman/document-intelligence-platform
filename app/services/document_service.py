@@ -1,4 +1,5 @@
 """Document service — upload, list, detail, search."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -95,13 +96,17 @@ class DocumentService:
             query = query.where(Document.document_type == document_type)
 
         total = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        items = list(self.db.scalars(query.order_by(Document.created_at.desc()).offset(offset).limit(limit)))
+        items = list(
+            self.db.scalars(query.order_by(Document.created_at.desc()).offset(offset).limit(limit))
+        )
         return items, total
 
     def search(self, query: str, *, limit: int = 20) -> list[Document]:
         return self._search_query(query, tenant_id=None, scoped=False, limit=limit)
 
-    def search_scoped(self, query: str, *, limit: int = 20, tenant_id: str | None) -> list[Document]:
+    def search_scoped(
+        self, query: str, *, limit: int = 20, tenant_id: str | None
+    ) -> list[Document]:
         return self._search_query(query, tenant_id=tenant_id, scoped=True, limit=limit)
 
     def _search_query(
@@ -154,7 +159,9 @@ class DocumentService:
                 ],
                 ocr_metadata=OCRMetadata(**document.extraction_result.ocr_metadata),
                 extraction_metadata=document.extraction_result.extraction_metadata,
-                detected_document_type=document.extraction_result.export_payload.get("detected_document_type"),
+                detected_document_type=document.extraction_result.export_payload.get(
+                    "detected_document_type"
+                ),
             )
         return DocumentDetail(
             document=DocumentRead.model_validate(document),

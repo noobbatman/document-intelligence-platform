@@ -1,4 +1,5 @@
 """LLM-fallback extraction service."""
+
 from __future__ import annotations
 
 import json
@@ -135,7 +136,8 @@ class LLMExtractionService:
             return {}
 
         null_fields = [
-            f for f in low_confidence_field_names
+            f
+            for f in low_confidence_field_names
             if current_fields.get(f) is None and f in _SCHEMAS.get(document_type, {})
         ]
         if not null_fields:
@@ -147,7 +149,9 @@ class LLMExtractionService:
             extracted = self._call_llm(prompt)
             return {k: v for k, v in extracted.items() if k in null_fields and v is not None}
         except Exception as exc:
-            logger.warning("llm_extraction_failed", extra={"error": str(exc), "doc_type": document_type})
+            logger.warning(
+                "llm_extraction_failed", extra={"error": str(exc), "doc_type": document_type}
+            )
             return {}
 
     def enrich_fields(
@@ -171,7 +175,8 @@ class LLMExtractionService:
             low_conf_names = [
                 fc.name if hasattr(fc, "name") else fc.get("name", "")
                 for fc in field_confidences
-                if (fc.confidence if hasattr(fc, "confidence") else fc.get("confidence", 1.0)) < threshold
+                if (fc.confidence if hasattr(fc, "confidence") else fc.get("confidence", 1.0))
+                < threshold
             ]
 
         llm_results = self.extract_failed_fields(
@@ -184,7 +189,10 @@ class LLMExtractionService:
         if llm_results:
             enriched = dict(current_fields)
             enriched.update(llm_results)
-            logger.info("llm_enriched_fields", extra={"fields": list(llm_results.keys()), "doc_type": document_type})
+            logger.info(
+                "llm_enriched_fields",
+                extra={"fields": list(llm_results.keys()), "doc_type": document_type},
+            )
             return enriched
 
         return current_fields

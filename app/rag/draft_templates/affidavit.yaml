@@ -1,0 +1,15 @@
+{
+  "draft_type": "affidavit",
+  "applicable_document_types": ["affidavit"],
+  "document_type_overrides": {
+    "affidavit": {
+      "support_terms": ["affidavit", "declaration", "affiant", "declarant", "sworn", "notary", "subscribed"],
+      "instructions": ["Summarize declarant identity, sworn facts, execution, and notarization."]
+    }
+  },
+  "sections": [
+    {"key": "overview", "title": "Overview", "required": true, "query": "affidavit declaration declarant affiant role", "instruction": "Identify declarant and purpose."},
+    {"key": "statements", "title": "Statements", "required": true, "query": "states declares sworn facts", "instruction": "Summarize sworn statements."},
+    {"key": "execution", "title": "Execution", "required": false, "query": "notary subscribed sworn execution date", "instruction": "Summarize signature and notary details."}
+  ]
+}

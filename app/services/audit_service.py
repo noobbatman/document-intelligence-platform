@@ -1,4 +1,5 @@
 """Audit logging service — records every significant document lifecycle event."""
+
 from typing import Any
 
 from sqlalchemy.orm import Session

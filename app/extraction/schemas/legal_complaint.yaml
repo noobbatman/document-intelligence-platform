@@ -1,0 +1,19 @@
+{
+  "document_type": "legal_complaint",
+  "llm_fill": true,
+  "fields": [
+    {"name": "case_caption", "type": "string", "required": true, "description": "Caption identifying parties", "patterns": ["([A-Z][A-Za-z0-9 &,.'\\-]+,\\s*Plaintiffs?.{0,180}?[A-Z][A-Za-z0-9 &,.'\\-]+,\\s*Defendants?)"]},
+    {"name": "case_number", "type": "string", "required": true, "description": "Court case or docket number", "patterns": ["\\bCase\\s+(\\d+:\\d{2}-cv-\\d{3,6}-[A-Z]+)\\b", "(?:civil\\s+action|case|docket)\\s*(?:no\\.?|number|#)\\s*[:#]?\\s*([A-Z0-9:\\-\\/\\.]+)"]},
+    {"name": "court", "type": "string", "required": true, "description": "Court name", "patterns": ["((?:UNITED\\s+STATES\\s+)?DISTRICT\\s+COURT(?:\\s+FOR\\s+THE\\s+[A-Z ]+)?|[A-Z][A-Za-z ,]+ Court)"]},
+    {"name": "plaintiffs", "type": "list", "required": true, "description": "Plaintiff names", "patterns": ["([A-Z][A-Z0-9 .,'&-]{3,120}),?\\s+Plaintiff,?\\s+(?:v\\.?|vs\\.?|ve)"]},
+    {"name": "defendants", "type": "list", "required": true, "description": "Defendant names", "patterns": ["v\\.?\\s+(.{5,500}?),?\\s+Defendants?\\b"]},
+    {"name": "filing_date", "type": "string", "required": false, "description": "Filing date", "patterns": ["(?:filed|dated)\\s*[:#]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "claims", "type": "list", "required": true, "all_matches": true, "description": "Causes of action or counts", "patterns": ["(?:^|\\n)\\s*COUNT\\s+((?:I|II|III|IV|V|VI|VII|VIII|IX|X|\\d+)[^\\n]{0,180})", "COMPLAINT\\s+FOR\\s+(.+?)(?:DEMAND\\s+FOR\\s+JURY\\s+TRIAL|JURY\\s+TRIAL\\s+DEMANDED|PRELIMINARY\\s+STATEMENT)"]},
+    {"name": "causes_of_action", "type": "list", "required": false, "all_matches": true, "description": "Causes of action or counts", "patterns": ["(?:^|\\n)\\s*COUNT\\s+((?:I|II|III|IV|V|VI|VII|VIII|IX|X|\\d+)[^\\n]{0,180})"]},
+    {"name": "jurisdiction", "type": "string", "required": false, "description": "Jurisdiction basis", "patterns": ["(28\\s+U\\.S\\.C\\.?\\s+§+\\s*1331)", "(28\\s+U\\.S\\.C\\.?\\s+§+\\s*1343)"]},
+    {"name": "venue", "type": "string", "required": false, "description": "Venue basis", "patterns": ["(28\\s+U\\.S\\.C\\.?\\s+§+\\s*1391(?:\\([a-z]\\))?)"]},
+    {"name": "statutes", "type": "list", "required": false, "all_matches": true, "description": "Statutes and rules cited", "patterns": ["\\b(\\d+\\s+U\\.S\\.C\\.?\\s+§+\\s*[\\w\\-.()]+)", "\\b(\\d+\\s+C\\.F\\.R\\.?\\s+§+\\s*[\\w\\-.()]+)", "\\b([A-Z][A-Za-z ]{2,80}\\s+Act)\\b", "\\b(Federal\\s+Rule\\s+of\\s+Civil\\s+Procedure\\s+\\d+)"]},
+    {"name": "relief_sought", "type": "list", "required": false, "all_matches": true, "description": "Requested relief", "patterns": ["(?:PRAYER\\s+FOR\\s+RELIEF|WHEREFORE|RELIEF\\s+REQUESTED)\\s*(.*?)(?=\\n\\s*(?:JURY\\s+DEMAND|DEMAND\\s+FOR\\s+JURY|DATED|Respectfully submitted|$))"]},
+    {"name": "jury_demand", "type": "boolean", "required": false, "description": "Whether jury trial is demanded", "patterns": ["\\b(?:jury\\s+trial\\s+demand(?:ed)?|demand\\s+for\\s+jury\\s+trial|demands?\\s+a\\s+jury\\s+trial|jury\\s+demand)\\b"]}
+  ]
+}

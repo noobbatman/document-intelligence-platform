@@ -1,4 +1,5 @@
 """Application entry-point and startup/shutdown lifecycle."""
+
 from __future__ import annotations
 
 import uuid
@@ -13,6 +14,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+import app.core.http_runtime as _runtime_module
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.http_runtime import (
@@ -25,7 +27,6 @@ from app.core.http_runtime import (
 )
 from app.core.logging import configure_logging
 from app.core.metrics import http_request_duration_seconds, http_requests_total
-import app.core.http_runtime as _runtime_module
 
 
 @asynccontextmanager
@@ -76,7 +77,9 @@ async def enforce_rate_limits_and_record_metrics(request: Request, call_next):
     current_settings = get_settings()
 
     try:
-        if current_settings.rate_limit_enabled and not should_skip_rate_limit(request, current_settings):
+        if current_settings.rate_limit_enabled and not should_skip_rate_limit(
+            request, current_settings
+        ):
             decision = _runtime_module.rate_limiter.check(
                 key=rate_limit_key(request, current_settings),
                 limit=rate_limit_for_request(request, current_settings),
@@ -117,9 +120,11 @@ async def enforce_rate_limits_and_record_metrics(request: Request, call_next):
 
 # ── Exception handlers ────────────────────────────────────────────────────────
 
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     from app.core.logging import get_logger
+
     logger = get_logger(__name__)
     logger.exception("unhandled_exception", extra={"path": request.url.path})
     return JSONResponse(
@@ -134,6 +139,7 @@ app.include_router(api_router, prefix=settings.api_v1_prefix)
 
 
 # ── Observability endpoints ───────────────────────────────────────────────────
+
 
 @app.get("/metrics", include_in_schema=False)
 def metrics() -> PlainTextResponse:

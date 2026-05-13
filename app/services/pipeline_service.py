@@ -1,4 +1,5 @@
 """Pipeline service — orchestrates OCR → classify → extract → validate → review → webhook."""
+
 from __future__ import annotations
 
 from time import perf_counter
@@ -69,7 +70,9 @@ class PipelineService:
             existing.export_payload = output["export_payload"]
             existing.ocr_metadata = output["ocr_metadata"]
             existing.extraction_metadata = output["extraction_metadata"]
-            existing.validation_results = output["extraction_metadata"].get("validation_results", [])
+            existing.validation_results = output["extraction_metadata"].get(
+                "validation_results", []
+            )
 
             document.document_type = output["document_type"]
             document.classifier_confidence = output["classifier_confidence"]
@@ -93,7 +96,8 @@ class PipelineService:
 
             elapsed = perf_counter() - started
             validation_failures = sum(
-                1 for v in existing.validation_results
+                1
+                for v in existing.validation_results
                 if not v.get("valid") and not v["field"].startswith("_cross")
             )
 
@@ -138,6 +142,18 @@ class PipelineService:
                     "correlation_id": correlation_id,
                 },
             )
+            if document.status == DocumentStatus.completed:
+                try:
+                    from app.core.config import get_settings
+                    from app.workers.tasks import generate_embeddings_task
+
+                    if get_settings().rag_enabled:
+                        generate_embeddings_task.delay(document.id, tenant_id=document.tenant_id)
+                except Exception as embed_exc:
+                    logger.warning(
+                        "embedding_task_enqueue_failed",
+                        extra={"document_id": document.id, "error": str(embed_exc)},
+                    )
 
             try:
                 from app.workers.tasks import embed_document_task
@@ -193,6 +209,7 @@ class PipelineService:
     def _cleanup_tmp(self, path: str, stored_path: str) -> None:
         if stored_path.startswith("s3://"):
             import os
+
             try:
                 os.unlink(path)
             except OSError:

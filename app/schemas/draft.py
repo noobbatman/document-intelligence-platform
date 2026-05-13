@@ -11,6 +11,7 @@ DraftTypeLiteral = Literal[
     "contract_summary",
     "notice_summary",
     "document_checklist",
+    "affidavit_summary",
 ]
 
 

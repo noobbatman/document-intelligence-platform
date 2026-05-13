@@ -3,18 +3,17 @@
 When a reviewer corrects a field, the original + corrected values are stored
 in CorrectionRecord so they can be exported as labelled training data.
 """
+
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import AuditEventType, CorrectionRecord, Document
+from app.db.models import CorrectionRecord, Document
 from app.services.audit_service import AuditService
 
 
@@ -73,17 +72,17 @@ class CorrectionService:
         rows = list(self.db.execute(stmt).all())
         return [
             {
-                "id":               record.id,
-                "document_id":      record.document_id,
-                "tenant_id":        tenant,
-                "document_type":    record.document_type,
-                "field_name":       record.field_name,
-                "original_value":   record.original_value,
-                "corrected_value":  record.corrected_value,
-                "ocr_snippet":      record.ocr_snippet,
-                "reviewer_name":    record.reviewer_name,
+                "id": record.id,
+                "document_id": record.document_id,
+                "tenant_id": tenant,
+                "document_type": record.document_type,
+                "field_name": record.field_name,
+                "original_value": record.original_value,
+                "corrected_value": record.corrected_value,
+                "ocr_snippet": record.ocr_snippet,
+                "reviewer_name": record.reviewer_name,
                 "pipeline_version": record.pipeline_version,
-                "created_at":       record.created_at.isoformat(),
+                "created_at": record.created_at.isoformat(),
             }
             for record, tenant in rows
         ]

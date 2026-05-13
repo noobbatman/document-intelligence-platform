@@ -1,4 +1,5 @@
 """Health check routes — liveness and readiness probes."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

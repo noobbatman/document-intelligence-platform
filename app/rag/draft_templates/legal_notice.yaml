@@ -1,0 +1,15 @@
+{
+  "draft_type": "legal_notice",
+  "applicable_document_types": ["legal_notice"],
+  "document_type_overrides": {
+    "legal_notice": {
+      "support_terms": ["notice", "demand", "cease and desist", "summons", "subpoena", "deadline", "required actions"],
+      "instructions": ["Summarize notice type, legal basis, required action, deadline, and non-compliance consequences."]
+    }
+  },
+  "sections": [
+    {"key": "overview", "title": "Overview", "required": true, "query": "notice type issuing party receiving party issue date", "instruction": "Identify notice type, sender, recipient, and date."},
+    {"key": "basis", "title": "Basis", "required": false, "query": "legal basis violation authority statute", "instruction": "Summarize legal basis or alleged violation."},
+    {"key": "actions_deadlines", "title": "Actions and Deadlines", "required": true, "query": "required actions response deadline comply within days", "instruction": "List required actions and deadlines."}
+  ]
+}

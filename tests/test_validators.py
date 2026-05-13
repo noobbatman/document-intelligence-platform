@@ -1,32 +1,64 @@
 """Tests for field validators and normalizers."""
+
 from __future__ import annotations
-import pytest
+
 from app.utils.validators import (
-    parse_date, parse_amount, validate_invoice_number,
-    validate_amount, validate_account_number, validate_statement_period,
-    validate_invoice_total_consistency, validate_balance_consistency,
-    validate_invoice_fields, validate_bank_statement_fields,
+    parse_amount,
+    parse_date,
+    validate_account_number,
+    validate_balance_consistency,
+    validate_bank_statement_fields,
+    validate_invoice_fields,
+    validate_invoice_number,
+    validate_invoice_total_consistency,
+    validate_statement_period,
 )
 
 
 class TestDateParsing:
-    def test_iso_format(self):     assert parse_date("2024-01-15") == "2024-01-15"
-    def test_dd_mm_yyyy(self):     assert parse_date("15/01/2024") == "2024-01-15"
-    def test_dd_month_yyyy(self):  assert parse_date("15 January 2024") == "2024-01-15"
-    def test_month_dd_yyyy(self):  assert parse_date("January 15, 2024") == "2024-01-15"
-    def test_abbrev_month(self):   assert parse_date("15 Jan 2024") == "2024-01-15"
-    def test_invalid_returns_none(self): assert parse_date("not a date") is None
-    def test_none_input(self):     assert parse_date(None) is None
+    def test_iso_format(self):
+        assert parse_date("2024-01-15") == "2024-01-15"
+
+    def test_dd_mm_yyyy(self):
+        assert parse_date("15/01/2024") == "2024-01-15"
+
+    def test_dd_month_yyyy(self):
+        assert parse_date("15 January 2024") == "2024-01-15"
+
+    def test_month_dd_yyyy(self):
+        assert parse_date("January 15, 2024") == "2024-01-15"
+
+    def test_abbrev_month(self):
+        assert parse_date("15 Jan 2024") == "2024-01-15"
+
+    def test_invalid_returns_none(self):
+        assert parse_date("not a date") is None
+
+    def test_none_input(self):
+        assert parse_date(None) is None
 
 
 class TestAmountParsing:
-    def test_gbp_symbol(self):    assert parse_amount("GBP 1,234.56") == 1234.56
-    def test_dollar(self):        assert parse_amount("$9,999.99") == 9999.99
-    def test_plain_float(self):   assert parse_amount(999.99) == 999.99
-    def test_integer(self):       assert parse_amount(100) == 100.0
-    def test_with_commas(self):   assert parse_amount("1,000.00") == 1000.0
-    def test_none_returns_none(self): assert parse_amount(None) is None
-    def test_invalid_returns_none(self): assert parse_amount("N/A") is None
+    def test_gbp_symbol(self):
+        assert parse_amount("GBP 1,234.56") == 1234.56
+
+    def test_dollar(self):
+        assert parse_amount("$9,999.99") == 9999.99
+
+    def test_plain_float(self):
+        assert parse_amount(999.99) == 999.99
+
+    def test_integer(self):
+        assert parse_amount(100) == 100.0
+
+    def test_with_commas(self):
+        assert parse_amount("1,000.00") == 1000.0
+
+    def test_none_returns_none(self):
+        assert parse_amount(None) is None
+
+    def test_invalid_returns_none(self):
+        assert parse_amount("N/A") is None
 
 
 class TestInvoiceValidators:
@@ -93,19 +125,27 @@ class TestBankValidators:
 
 class TestFullValidationRunners:
     def test_invoice_runner_returns_results(self):
-        results = validate_invoice_fields({
-            "invoice_number": "INV-001",
-            "invoice_date": "2024-01-15",
-            "subtotal": 100.0, "tax": 20.0, "total_amount": 120.0,
-        })
+        results = validate_invoice_fields(
+            {
+                "invoice_number": "INV-001",
+                "invoice_date": "2024-01-15",
+                "subtotal": 100.0,
+                "tax": 20.0,
+                "total_amount": 120.0,
+            }
+        )
         assert any(r["field"] == "invoice_number" for r in results)
         assert any(r["field"] == "_cross_total" for r in results)
 
     def test_bank_runner_returns_results(self):
-        results = validate_bank_statement_fields({
-            "account_number": "1234-5678",
-            "statement_period": "01/01/2024 to 31/01/2024",
-            "opening_balance": 1000.0, "closing_balance": 1200.0, "available_balance": 1200.0,
-        })
+        results = validate_bank_statement_fields(
+            {
+                "account_number": "1234-5678",
+                "statement_period": "01/01/2024 to 31/01/2024",
+                "opening_balance": 1000.0,
+                "closing_balance": 1200.0,
+                "available_balance": 1200.0,
+            }
+        )
         assert any(r["field"] == "account_number" for r in results)
         assert any(r["field"] == "_cross_balance" for r in results)

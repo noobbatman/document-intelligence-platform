@@ -2,7 +2,7 @@
 
 # Document Intelligence Platform
 
-### Production-grade document processing pipeline — upload to structured export in a single stack
+### Legal document ingestion → structured extraction → grounded draft generation → operator-driven improvement
 
 <br/>
 
@@ -12,860 +12,358 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![Redis](https://img.shields.io/badge/Redis-7-dc382d?style=flat-square&logo=redis&logoColor=white)](https://redis.io)
 [![Docker](https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square&logo=docker&logoColor=white)](https://docs.docker.com/compose)
-[![Tests](https://img.shields.io/badge/Tests-110%20passing-22c55e?style=flat-square&logo=pytest&logoColor=white)](tests/)
-[![License](https://img.shields.io/badge/License-MIT-64748b?style=flat-square)](LICENSE)
-
-<br/>
-
-```
-upload → OCR → classify → extract → line items → LLM enrich → validate → score → review → export
-```
-
-```
-legal doc → chunk → embed → retrieve evidence → Gemini 2.5 Flash draft → operator edit → learned preference
-```
 
 </div>
 
 ---
 
-## Overview
+## What this system does
 
-Document Intelligence Platform ingests scanned PDFs and images, runs a multi-stage AI pipeline to classify and extract structured data, scores extraction confidence, routes uncertain fields to a human review queue, and exports results as CSV, XLSX, or JSON — all observable via Prometheus/Grafana and manageable through a Streamlit review UI.
+1. **Document Processing** — accepts scanned PDFs, low-resolution images, and noisy legal documents; applies an OCR preprocessing pipeline (deskew, denoise, CLAHE contrast enhancement) and routes to the best engine (Tesseract, PaddleOCR, or TrOCR for handwriting) based on per-page confidence.
 
-Built by surveying 30+ open-source alternatives and commercial platforms (Rossum, Stampli, ABBYY FlexiCapture, MinerU, deepdoctection) to identify what production deployments actually need beyond basic field extraction.
+2. **Structured Extraction** — classifies the document type, then runs a schema-driven extractor: regex pre-pass for high-signal fields, Gemini fill for gaps, with every extracted value linked back to a source text snippet.
 
----
+3. **Grounded Draft Generation** — retrieves relevant passages from the document using BGE embeddings + pgvector and generates a structured legal-style draft (internal memo, case fact summary, affidavit summary, etc.) with mandatory `[Page N]` inline citations and `[UNSUPPORTED: reason]` markers for anything not present in the source.
 
-## About this project
-
-**Sole developer** — I designed and built the entire platform from scratch,
-including architecture decisions, all Python backend code, the Celery worker
-pipeline, database schema migrations, Docker Compose setup, Prometheus/Grafana
-observability, and all 110 test cases.
-
-**What I implemented:**
-- Multi-stage document pipeline: OCR → classify → extract → validate → score → review → export
-- Async task queue with Celery, Redis broker, and priority queues
-- Fraud / duplicate detection (4-signal: hash, invoice collision, anomaly, velocity)
-- Human-in-the-loop review workflow with page-level evidence (bbox, page_number)
-- Active learning loop via CorrectionRecord → training data export
-- 3-way purchase order matching with fuzzy vendor matching
-- Prometheus metrics + Grafana dashboards for full observability
-- Docker multi-stage build, non-root user, healthchecks
-- 110 pytest tests covering API routes, pipeline, validators, and middleware
-
-**What I learnt:**
-- How to design production-grade async pipelines (Celery + Redis + PostgreSQL)
-- OCR preprocessing techniques (Tesseract, PaddleOCR, noise normalization)
-- Confidence scoring across multiple signals for ML output trustworthiness
-- How to structure a multi-module Python project with pyproject.toml and uv
-- Prometheus/Grafana observability — what metrics actually matter in production
-- Building human-review workflows (HITL) with audit trails and active learning
-
----
-
-## Product Screenshots
-
-### Dashboard
-
-![Dashboard](images/dashboard.png)
-
-### Analytics
-
-![Analytics](images/analytics.png)
-
-### Review Queue
-
-![Review queue](images/review_queue.png)
-
----
-
-## Benchmark Results
-
-> **Dataset:** 80 synthetic PDFs — 40 invoices · 40 bank statements · clean / multipage / noisy variants  
-> Full methodology: [`evaluation/REPORT.md`](evaluation/REPORT.md) · Raw results: [`evaluation/results.json`](evaluation/results.json)
-
-### Classification Accuracy
-
-| Variant | Accuracy |
-|---|---|
-| Clean documents | **100%** |
-| Multi-page documents | **100%** |
-| Noisy / OCR-artefact documents | **100%** |
-| **Overall** | **100%** |
-
-### Field Extraction (F1 Score)
-
-| Field | Precision | Recall | F1 |
-|---|---|---|---|
-| `closing_balance` | 1.000 | 1.000 | **1.000** |
-| `invoice_date` | 1.000 | 1.000 | **1.000** |
-| `opening_balance` | 1.000 | 1.000 | **1.000** |
-| `vendor_name` | 1.000 | 1.000 | **1.000** |
-| `invoice_number` | 0.950 | 0.950 | **0.950** |
-| `account_number` | 1.000 | 0.925 | **0.961** |
-| `customer_name` | 0.900 | 0.675 | **0.771** |
-| `subtotal` / `tax` | 1.000 | 0.750 | **0.857** |
-| `total_amount` | 0.750 | 0.750 | **0.750** |
-| **Macro-average F1** | | | **0.905** |
-
-**Performance:** avg classification latency **0.49 ms** · avg document confidence **0.79**
-
-### Legal RAG + Drafting Evaluation
-
-> **Dataset:** 3 synthetic legal text fixtures and JSON ground-truth cases in
-> [`evaluation/dataset/legal_docs/`](evaluation/dataset/legal_docs/) and
-> [`evaluation/ground_truth/legal/`](evaluation/ground_truth/legal/).
-
-| Evaluation | Command | Result |
-|---|---|---|
-| Retrieval | `python evaluation/eval_retrieval.py evaluation/ground_truth/legal/retrieval_cases.json` | Recall@5 **1.000** · MRR **0.750** over 8 cases in the local hash-fallback run |
-| Draft groundedness | `python evaluation/eval_drafts.py evaluation/ground_truth/legal/draft_cases.json` | Groundedness **1.000** · unsupported honesty **1.000** · ROUGE-lite **0.681** |
-| Improvement loop | `python evaluation/eval_improvement.py evaluation/ground_truth/legal/improvement_cases.json` | edit rate **0.80 → 0.20**, relative drop **75%** |
-
-These are intentionally small, transparent synthetic checks rather than a
-claim of broad legal-domain performance. They verify the submission-critical
-flows: evidence retrieval, citation-grounded drafts, unsupported-section
-honesty, and measurable improvement after operator edits.
-
-Retrieval metrics were measured using `BAAI/bge-base-en-v1.5` embeddings. If
-the model is not installed, `eval_retrieval.py` falls back to a deterministic
-hash-based embedder which can produce strong scores on lexically clean test
-cases but does not reflect production retrieval quality.
-
----
-
-## Feature Comparison
-
-| Feature | Most OSS Projects | This Platform |
-|---|---|---|
-| Line item extraction | Header fields only | pdfplumber + regex fallback |
-| Duplicate / fraud detection | — | Hash + invoice collision + anomaly + velocity |
-| LLM fallback extraction | — | Claude Haiku for null fields |
-| Email ingestion (IMAP) | — | Poll + auto-enqueue |
-| CSV / Excel export | JSON only | CSV, XLSX, JSON batch |
-| PO matching (3-way) | — | PO number + vendor + amount tolerance |
-| Page-level review evidence | — | `page_number` + `bbox` + `validation_reason` |
-| Cross-field consistency scoring | — | subtotal+tax≈total, closing≈available |
-| Field format validators | — | Dates, amounts, IBAN, invoice ID patterns |
-| Active learning feedback loop | — | `CorrectionRecord` + export endpoint |
-| Tenant-aware access controls | — | Tenant-scoped document, review, PO, dedup, and export routes |
-| Request rate limiting | Proxy-only | App-level per-minute limits (in-memory + Redis) |
-| HTTP request metrics | — | Prometheus counters + latency histograms on every request |
-| Priority processing queues | — | Normal / high / webhooks |
+4. **Improvement Loop** — operator edits to generated drafts are captured, distilled into reusable preference rules by Gemini, stored per tenant/document-type, and automatically injected into all future drafts. Preference effectiveness is tracked and decays when rules stop helping.
 
 ---
 
 ## Architecture
 
 ```
-Client
-  │
-  ▼
-FastAPI  /api/v1
-  ├── POST   /documents/upload                → 202 Accepted, enqueues Celery task
-  ├── POST   /documents/upload/batch          → batch upload
-  ├── GET    /documents                       → paginated + filtered list
-  ├── GET    /documents/search?q=             → filename + OCR text search
-  ├── GET    /documents/{id}/result           → extraction + line items + validation
-  ├── GET    /documents/{id}/status           → lightweight poll
-  ├── GET    /documents/{id}/history          → full audit trail
-  ├── POST   /documents/{id}/reprocess        → re-run pipeline
-  ├── DELETE /documents/{id}                  → soft delete
-  │
-  ├── GET    /reviews/pending                 → tasks with page_number + bbox + validation_reason
-  ├── POST   /reviews/{id}/decision           → submit correction (stored for active learning)
-  │
-  ├── POST   /purchase-orders                 → register a PO
-  ├── GET    /purchase-orders                 → list POs
-  ├── POST   /purchase-orders/match/{id}      → run 3-way PO match
-  ├── GET    /purchase-orders/match/{id}      → get match result
-  │
-  ├── POST   /deduplication/{id}/check        → hash + collision + anomaly + velocity check
-  │
-  ├── GET    /exports/csv                     → flat CSV download
-  ├── GET    /exports/xlsx                    → styled Excel workbook
-  ├── GET    /exports/json                    → full extraction payloads
-  │
-  ├── GET    /analytics/metrics/overview      → per-tenant document counts + confidence
-  ├── GET    /analytics/corrections           → tenant-scoped reviewer corrections
-  ├── GET    /analytics/corrections/stats     → field failure statistics
-  ├── GET    /analytics/audit/tenant          → tenant-scoped audit log
-  │
-  ├── POST   /webhooks                        → register (HMAC-SHA256 signed)
-  └── GET    /health/live  /health/ready
-  │
-  ▼
-Celery Workers
-  ├── documents.high    — dedicated priority queue
-  ├── documents.normal  — 2 replicas × 4 concurrency
-  ├── webhooks          — 8 concurrency
-  └── poll_email_task   — scheduled IMAP polling (when configured)
-       │
-       ▼
-  DocumentPipeline
-    1. OCR          (Tesseract | PaddleOCR)
-    2. Normalize    (OCR artefact cleaning)
-    3. Classify     (TF-IDF + regex + fuzzy keyword — 4 document types)
-    4. Extract      (invoice | bank_statement | receipt | contract)
-    5. Line Items   (pdfplumber tables → regex fallback)
-    6. LLM Enrich   (Claude Haiku — optional, null fields only)
-    7. Validate     (dates, amounts, IBAN, cross-field consistency)
-    8. Score        (5-signal: extraction + OCR + classifier + format + consistency)
-    9. Review       (low-confidence → ReviewTask with page evidence)
-  │
-  ▼
-PostgreSQL · Redis · Local/S3 Storage
-  │
-  ▼
-Prometheus · Grafana · Celery Flower · Streamlit Review UI
+PDF / Image
+     │
+     ▼
+┌──────────────────────────────────────────┐
+│ OCR Pipeline                             │
+│  PyMuPDF → 3× zoom render               │
+│  → preprocess: deskew · denoise · CLAHE  │
+│  → engine routing:                       │
+│     Tesseract (default)                  │
+│     PaddleOCR (paddle mode)              │
+│     TrOCR — microsoft/trocr-base-        │
+│             handwritten (auto fallback   │
+│             when avg confidence < 0.70)  │
+└─────────────────┬────────────────────────┘
+                  │ raw text + word confidences
+                  ▼
+┌──────────────────────────────────────────┐
+│ Classification                           │
+│  TF-IDF · keyword signals · IDF weights  │
+│  → document_type (legal_complaint /      │
+│    contract / affidavit / legal_notice / │
+│    case_brief / unknown …)               │
+└─────────────────┬────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────┐
+│ Schema-Driven Extraction                 │
+│  Regex pre-pass (patterns from YAML)     │
+│  → Gemini fill for missing fields        │
+│  → ExtractionOutput: typed fields +      │
+│    source snippets + entity list         │
+└─────────────────┬────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────┐
+│ Chunking + Embedding (async)             │
+│  Overlapping text chunks                 │
+│  → BGE embeddings → pgvector IVFFlat     │
+└─────────────────┬────────────────────────┘
+                  │
+                  ▼
+┌──────────────────────────────────────────┐
+│ Draft Generation                         │
+│  Per-section BGE retrieval (one query    │
+│  per template section) + keyword support │
+│  → Gemini with strict grounding rules:   │
+│    · cite every fact as [Page N]         │
+│    · write [UNSUPPORTED: reason] for     │
+│      anything not in the source          │
+│  → structured sections + evidence_ids   │
+└─────────────────┬────────────────────────┘
+                  │ operator reviews, edits sections
+                  ▼
+┌──────────────────────────────────────────┐
+│ Preference Learning                      │
+│  DraftEdit captured per section          │
+│  → Celery task → Gemini extracts rule    │
+│  → DraftPreference (tenant-scoped)       │
+│  → injected into future system prompts   │
+│  → effectiveness scored + decayed        │
+└──────────────────────────────────────────┘
 ```
 
-### Legal RAG + Drafting
-
-The legal drafting layer adds:
-
-- `document_chunks` with pgvector embeddings for section-aware legal text chunks
-- `draft_outputs` for generated legal prose with evidence chunk IDs
-- `draft_edits` for operator corrections
-- `draft_preferences` for learned reusable drafting rules
-
-Draft generation uses **Gemini 2.5 Flash** (`DRAFT_MODEL=gemini-2.5-flash`) and
-retrieves document evidence before generation. The model is instructed to cite
-source pages inline and to mark missing information as `[UNSUPPORTED: reason]`
-instead of inferring.
-
-### Improvement Loop
-
-```mermaid
-flowchart LR
-  A["Generated draft"] --> B["Operator edits section"]
-  B --> C["DraftEdit stored"]
-  C --> D["extract_preferences_task"]
-  D --> E["Reusable DraftPreference"]
-  E --> F["Injected into future drafts"]
-```
-
-This closes the loop between review and future generation: edits become
-tenant-scoped preferences that are applied to later drafts of the same document
-type.
+For a detailed breakdown see [`docs/architecture.md`](docs/architecture.md).
 
 ---
 
-## Installation
+## Quick start
 
 ### Prerequisites
 
-| Tool | Minimum Version | Purpose |
+| Tool | Version | Purpose |
 |---|---|---|
-| [Docker Desktop](https://docs.docker.com/get-docker/) | 24+ | Full stack via Compose |
-| [Python](https://python.org/downloads/) | 3.11+ | Local / bare-metal run |
-| [uv](https://docs.astral.sh/uv/getting-started/installation/) | 0.4+ | Fast Python package manager |
-| [Tesseract OCR](https://tesseract-ocr.github.io/tessdoc/Installation.html) | 4.1+ | OCR engine (bare-metal only) |
+| [Docker Desktop](https://docs.docker.com/get-docker/) | 24+ | Full stack |
+| `GOOGLE_API_KEY` | — | Gemini 2.5 Flash (extraction + drafts) |
 
----
-
-### Option 1 — Docker Compose (Recommended)
-
-The fastest way to get the full stack — API, workers, PostgreSQL, Redis, MinIO, Prometheus, Grafana, and the Streamlit review UI — running locally.
-
-**Step 1 — Clone and configure**
+### Run
 
 ```bash
-git clone <your-repo-url>
-cd END-TO-END-main
-cp .env.example .env        # Docker Compose uses service hostnames (postgres, redis)
-```
-
-**Step 2 — Start all services**
-
-```bash
+git clone <repo-url>
+cd improved
+cp .env.example .env
+# Add your GOOGLE_API_KEY to .env
 docker compose up --build -d
-```
-
-**Step 3 — Apply database migrations**
-
-```bash
 docker compose exec api alembic upgrade head
 ```
 
-**Step 4 — Run the demo** *(optional)*
+The API is available at `http://localhost:8000`. Swagger UI at `http://localhost:8000/docs`.
+
+### Upload a document and generate a draft
 
 ```bash
-bash scripts/demo_run.sh
+# Upload (returns document ID immediately; processing runs async)
+curl -X POST http://localhost:8000/api/v1/documents/upload \
+  -F "file=@sample_docs/sample_legal_complaint.pdf"
+
+# Poll until status = completed
+curl http://localhost:8000/api/v1/documents/{id}/status
+
+# View structured extraction result
+curl http://localhost:8000/api/v1/documents/{id}/result
+
+# Generate an internal memo draft
+curl -X POST http://localhost:8000/api/v1/documents/{id}/drafts \
+  -H "Content-Type: application/json" \
+  -d '{"draft_type": "internal_memo"}'
+
+# Retrieve draft with evidence chunk IDs
+curl http://localhost:8000/api/v1/documents/{id}/drafts/{draft_id}
+
+# Inspect the source chunks that grounded the draft
+curl http://localhost:8000/api/v1/documents/{id}/drafts/{draft_id}/evidence
 ```
 
-**Step 5 — Stop when done**
+---
 
-```bash
-docker compose down          # stop only
-docker compose down -v       # stop + delete all data volumes
+## Sample inputs and outputs
+
+The `sample_docs/` directory contains synthetic legal documents and the expected outputs they produce.
+
+### Input — synthetic federal court complaint
+
+[`sample_docs/sample_legal_complaint.txt`](sample_docs/sample_legal_complaint.txt) — a synthetic federal civil complaint suitable for upload as a plain-text or PDF document.
+
+### Output — structured extraction
+
+[`sample_docs/sample_extraction_output.json`](sample_docs/sample_extraction_output.json) — the `ExtractionOutput` the pipeline produces for the above complaint: typed fields (case number, court, plaintiffs, defendants, claims, statutes, relief sought), entity list, and per-field source snippets linking each value back to the original text.
+
+### Output — grounded draft
+
+[`sample_docs/sample_draft_output.json`](sample_docs/sample_draft_output.json) — a complete `internal_memo` draft for the same document, showing:
+- `[Page N]` inline citations on every factual claim
+- `[UNSUPPORTED: reason]` where information was absent from the source
+- `confidence` rating per section (`high` / `medium` / `low` / `unsupported`)
+- `evidence_chunk_ids` linking each section to the specific pgvector chunks used
+
+### Output — operator edit and learned preference
+
+[`sample_docs/sample_improvement_loop.json`](sample_docs/sample_improvement_loop.json) — shows the full improvement loop: the original draft section, the operator's edit, the preference rule Gemini extracted from the diff, and how that rule appears in the next draft's system prompt.
+
+---
+
+## Draft types
+
+| Draft type | Best for |
+|---|---|
+| `internal_memo` | Legal complaints, contracts, any document needing a structured senior-partner memo |
+| `case_fact_summary` | Condensed factual chronology for case review |
+| `notice_summary` | Legal notices, demand letters |
+| `affidavit_summary` | Affidavits and sworn statements |
+| `case_brief` | Case briefs and appellate filings |
+| `legal_notice` | Formal legal notice documents |
+| `affidavit` | Full affidavit analysis |
+| `document_checklist` | Completeness audit against required fields |
+
+---
+
+## Grounding and unsupported-claim control
+
+The system enforces source-grounded generation at the prompt level:
+
+```
+STRICT GROUNDING RULES:
+1. Every factual claim must be traceable to a specific source chunk.
+   Use inline citations in the format [Page N] or [Page N - Section Title].
+2. If information needed for a section is not present in the source material,
+   write "[UNSUPPORTED: {reason}]" rather than inferring or hallucinating.
+3. Do not draw on general legal knowledge to fill gaps.
+   Only use what the documents contain.
 ```
 
-<details>
-<summary><strong>Service URLs</strong></summary>
+Each draft section additionally carries a `confidence` field (`high` / `medium` / `low` / `unsupported`). Sections backed by multiple high-similarity chunks score `high`; sections where the model had to acknowledge gaps score `unsupported`.
 
-| Service | URL | Credentials |
+Retrieved chunks are passed to the model as labeled source blocks:
+
+```
+[Chunk 3 | Page 7 | JURISDICTION AND VENUE] <chunk-uuid>
+This Court has jurisdiction over this action pursuant to 28 U.S.C. § 1331 ...
+```
+
+The model can only cite chunk IDs it was given. Cited IDs are validated post-generation; invalid IDs are dropped from `evidence_chunk_ids`.
+
+---
+
+## Improvement loop
+
+```
+operator edits a draft section
+          │
+          ▼
+PATCH /documents/{id}/drafts/{draft_id}/sections
+          │  DraftEdit stored (original, edited, section_key, reviewer)
+          ▼
+Celery: extract_preference_from_edit
+          │  Gemini reads the diff → ONE reusable rule (general, not doc-specific)
+          │  Rule embedded (BGE) + deduplicated against existing preferences
+          ▼
+DraftPreference stored (tenant + document_type scoped)
+          │
+          ▼
+Next draft for same (tenant, document_type):
+  system prompt includes:
+    LEARNED PREFERENCES FROM PRIOR OPERATOR EDITS:
+    - When specifying governing law, include a clause to disregard
+      conflict of laws principles.
+  plus top-2 (original → corrected) few-shot excerpt pairs
+```
+
+**Effectiveness scoring** — after each reviewed draft, every applied preference receives a score update proportional to edit coverage:
+
+- No sections edited → `+0.10` (draft accepted as-is)
+- Some sections edited → `−0.05 × (edited_sections / total_sections)`
+
+This means editing one section of a six-section memo penalises each preference by `−0.008`, not the flat `−0.05`. Preferences that consistently produce accepted drafts rise; those requiring repeated correction decay toward zero.
+
+---
+
+## Document types supported
+
+New document types require only YAML — no Python code changes:
+
+| Type | Extraction schema | Draft template |
 |---|---|---|
-| API + Frontend | http://localhost:8000 | — |
-| Swagger / OpenAPI | http://localhost:8000/docs | — |
-| Prometheus metrics | http://localhost:8000/metrics | — |
-| Celery Flower | http://localhost:5555 | — |
-| Grafana | http://localhost:3000 | admin / admin |
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
-| Streamlit Review UI | http://localhost:8501 | — |
-
-</details>
+| `legal_complaint` | `extraction/schemas/legal_complaint.yaml` | `internal_memo`, `case_fact_summary` |
+| `contract` | `extraction/schemas/contract.yaml` | `internal_memo` |
+| `affidavit` | `extraction/schemas/affidavit.yaml` | `affidavit`, `affidavit_summary` |
+| `legal_notice` | `extraction/schemas/legal_notice.yaml` | `legal_notice`, `notice_summary` |
+| `case_brief` | `extraction/schemas/case_brief.yaml` | `case_brief` |
+| `unknown` | `extraction/schemas/unknown.yaml` | all templates (best-effort) |
 
 ---
 
-### Option 2 — Local Bare-Metal (uv)
+## OCR pipeline
 
-Run FastAPI and Celery directly on your machine without Docker. Requires PostgreSQL and Redis running locally.
+| Input condition | Handling |
+|---|---|
+| Clean PDF | PyMuPDF text extraction (no OCR needed) |
+| Scanned / low-res | 3× zoom render → deskew → denoise → CLAHE → Tesseract |
+| Noisy / skewed | `fastNlMeansDenoising` + `cv2.minAreaRect` deskew |
+| Handwritten / degraded | Auto-routed to `microsoft/trocr-base-handwritten` when avg word confidence < 0.70 |
+| cv2 unavailable | Pillow fallback: autocontrast + sharpen |
 
-#### 2a — System dependencies
+OCR preprocessing is configurable:
 
-**macOS (Homebrew)**
-
-```bash
-brew install tesseract poppler postgresql@16 redis
-brew services start postgresql@16
-brew services start redis
-createdb docintel
+```env
+OCR_ENGINE=auto                        # tesseract | paddle | trocr | auto
+OCR_ENGINE_PRIMARY=tesseract
+OCR_PREPROCESS=true
+OCR_DESKEW=true
+OCR_DENOISE=true
+OCR_ENHANCE_CONTRAST=true
+HANDWRITING_CONFIDENCE_THRESHOLD=0.70
+PDF_RENDER_ZOOM=3.0
 ```
-
-**Ubuntu / Debian**
-
-```bash
-sudo apt-get update
-sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libtesseract-dev \
-    poppler-utils libglib2.0-0 libsm6 libxext6 libxrender1 \
-    postgresql postgresql-client redis-server
-sudo systemctl start postgresql redis-server
-sudo -u postgres createdb docintel
-```
-
-**Windows**
-
-- Install Tesseract via the [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki)
-- Install PostgreSQL via [EDB installer](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads)
-- Install Redis via [Memurai](https://www.memurai.com/) or WSL2
-- Add Tesseract to `PATH`
-
-#### 2b — Python environment
-
-```bash
-# Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create a Python 3.11 virtual environment
-uv venv .venv --python 3.11
-
-# Activate the environment
-source .venv/bin/activate          # macOS / Linux
-# .\.venv\Scripts\Activate.ps1    # Windows PowerShell
-```
-
-#### 2c — Install dependencies
-
-```bash
-# Core application + development tools
-uv pip install -e ".[dev]"
-
-# Download the required spaCy language model
-python -m spacy download en_core_web_sm
-```
-
-<details>
-<summary><strong>Optional extras</strong></summary>
-
-```bash
-# PaddleOCR (better accuracy on noisy/scanned docs, heavier footprint)
-uv pip install -e ".[paddle]"
-
-# LayoutLM / Donut (transformer-based extraction, requires GPU recommended)
-uv pip install -e ".[ml]"
-```
-
-</details>
-
-#### 2d — Configure environment
-
-```bash
-cp .env.localhost.example .env
-```
-
-Edit `.env` and verify:
-- `DATABASE_URL` points to your local PostgreSQL instance
-- `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` point to your local Redis
-
-#### 2e — Apply migrations
-
-```bash
-alembic upgrade head
-```
-
-#### 2f — Start services
-
-Open **three terminals** in the project root with the venv active:
-
-**Terminal 1 — API server**
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-**Terminal 2 — Celery worker**
-
-```bash
-celery -A app.workers.celery_app.celery_app worker \
-    --loglevel=INFO \
-    --queues=documents.normal,documents.high \
-    --concurrency=4
-```
-
-**Terminal 3 — Streamlit Review UI** *(optional)*
-
-```bash
-REVIEW_API_BASE=http://localhost:8000/api/v1 \
-    streamlit run review_ui/streamlit_app.py --server.port 8501
-```
-
-The API is now available at `http://localhost:8000/docs`.
 
 ---
 
-### Option 3 — Production-like with Docker (multi-replica)
-
-```bash
-docker compose up --build -d --scale worker=3
-docker compose exec api alembic upgrade head
-```
-
-For actual production, replace the in-memory rate limiter with the Redis-backed one by setting `REDIS_RATE_LIMIT_URL` in `.env` and pointing to a shared Redis instance accessible from all API replicas.
-
----
-
-## Configuration Reference
-
-All settings are loaded from the `.env` file. Copy the appropriate template and edit:
-
-```bash
-cp .env.example .env            # Docker Compose
-cp .env.localhost.example .env  # bare-metal local
-```
-
-<details>
-<summary><strong>Full configuration table</strong></summary>
+## Configuration reference
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP_NAME` | `Document Intelligence Platform` | Application name in API metadata |
-| `APP_ENV` | `local` | `local` \| `production` |
-| `DEBUG` | `false` | Enable debug mode and traceback responses |
-| `LOG_LEVEL` | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` |
-| `PIPELINE_VERSION` | `0.3.0` | Stamped on every extraction result |
-| `API_V1_PREFIX` | `/api/v1` | URL prefix for all versioned routes |
-| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins. Set explicitly in production |
-| `DATABASE_URL` | `postgresql+psycopg://...` | SQLAlchemy connection string |
-| `DB_POOL_SIZE` | `10` | SQLAlchemy connection pool size |
-| `DB_MAX_OVERFLOW` | `20` | Max connections above pool size |
-| `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Celery broker |
-| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/1` | Celery result backend |
-| `CELERY_TASK_SOFT_TIME_LIMIT` | `300` | Seconds before task receives SoftTimeLimitExceeded |
-| `CELERY_TASK_TIME_LIMIT` | `600` | Hard timeout (seconds) |
-| `STORAGE_BACKEND` | `local` | `local` \| `s3` |
-| `UPLOAD_DIR` | `data/uploads` | Local upload directory |
-| `EXPORT_DIR` | `data/exports` | Local export directory |
-| `S3_ENDPOINT_URL` | *(empty)* | S3-compatible endpoint (MinIO, AWS, etc.) |
-| `S3_ACCESS_KEY_ID` | *(empty)* | S3 access key |
-| `S3_SECRET_ACCESS_KEY` | *(empty)* | S3 secret key |
-| `S3_BUCKET_UPLOADS` | `docintel-uploads` | Bucket for uploaded files |
-| `S3_BUCKET_EXPORTS` | `docintel-exports` | Bucket for exported files |
-| `OCR_ENGINE` | `tesseract` | `tesseract` \| `paddle` |
-| `SPACY_MODEL` | `en_core_web_sm` | spaCy model for entity extraction |
-| `LOW_CONFIDENCE_THRESHOLD` | `0.75` | Fields below this score are routed to review |
-| `MAX_UPLOAD_SIZE_MB` | `50` | Maximum upload file size |
-| `API_KEYS` | *(empty)* | Comma-separated valid API keys. Empty = auth disabled |
-| `API_KEY_HEADER` | `X-API-Key` | Header name for API key authentication |
-| `RATE_LIMIT_ENABLED` | `true` | Enable app-level rate limiting |
-| `RATE_LIMIT_UPLOAD_PER_MINUTE` | `30` | Upload endpoint rate limit |
-| `RATE_LIMIT_DEFAULT_PER_MINUTE` | `120` | Default endpoint rate limit |
-| `REDIS_RATE_LIMIT_URL` | *(empty)* | Set to enable Redis-backed rate limiter (multi-replica) |
-| `CACHE_TTL_SECONDS` | `300` | Response cache TTL |
-| `WEBHOOK_MAX_RETRIES` | `3` | Webhook delivery retry attempts |
-| `WEBHOOK_TIMEOUT_SECONDS` | `10` | Per-request webhook timeout |
-| `LLM_EXTRACTION_ENABLED` | `false` | Enable Claude Haiku fallback extraction |
-| `ANTHROPIC_API_KEY` | *(empty)* | Required when `LLM_EXTRACTION_ENABLED=true` |
-| `EMAIL_IMAP_HOST` | *(empty)* | IMAP host for email ingestion |
-| `EMAIL_IMAP_PORT` | `993` | IMAP port |
-| `EMAIL_ADDRESS` | *(empty)* | Mailbox address |
-| `EMAIL_PASSWORD` | *(empty)* | App password or IMAP password |
-| `EMAIL_FOLDER` | `INBOX` | Folder to poll |
-| `EMAIL_MAX_ATTACHMENTS_PER_RUN` | `50` | Maximum attachments processed per poll cycle |
+| `GOOGLE_API_KEY` | required | Gemini API key (extraction + drafts + preference extraction) |
+| `DATABASE_URL` | `postgresql+psycopg://...` | PostgreSQL connection |
+| `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis broker |
+| `OCR_ENGINE` | `auto` | OCR engine mode |
+| `OCR_PREPROCESS` | `true` | Enable image preprocessing pipeline |
+| `HANDWRITING_CONFIDENCE_THRESHOLD` | `0.70` | Auto-route to TrOCR below this confidence |
+| `PDF_RENDER_ZOOM` | `3.0` | DPI multiplier for PDF page rendering |
+| `DRAFT_MODEL` | `gemini-2.5-flash` | Gemini model for draft generation |
+| `DRAFT_MAX_CHUNKS` | `20` | Max retrieved chunks per draft |
+| `PREFERENCE_MAX_PER_DRAFT` | `5` | Max learned preferences injected per draft |
+| `PREFERENCE_DEDUP_THRESHOLD` | `0.92` | Cosine similarity threshold for deduplication |
 
-</details>
+Full configuration: `.env.example`.
 
 ---
 
-## API Reference
-
-Interactive documentation is available at `http://localhost:8000/docs` (Swagger UI) and `http://localhost:8000/redoc`.
-
-### Authentication
-
-When `API_KEYS` is set, all endpoints require the `X-API-Key` header:
+## Running tests
 
 ```bash
-curl -H "X-API-Key: your-key" http://localhost:8000/api/v1/documents
-```
-
-Leave `API_KEYS` empty in `.env` to disable authentication for local development.
-
-### Multi-tenancy
-
-Pass `X-Tenant-ID` to scope all reads and writes to a specific tenant:
-
-```bash
-curl -H "X-Tenant-ID: acme-corp" http://localhost:8000/api/v1/documents
-```
-
-### Core workflows
-
-<details>
-<summary><strong>Upload and process a document</strong></summary>
-
-```bash
-# Single file upload (returns 202 + task ID immediately)
-curl -X POST http://localhost:8000/api/v1/documents/upload \
-  -F "file=@invoice.pdf"
-
-# High-priority queue
-curl -X POST "http://localhost:8000/api/v1/documents/upload?priority=true" \
-  -F "file=@urgent.pdf"
-
-# Batch upload
-curl -X POST http://localhost:8000/api/v1/documents/upload/batch \
-  -F "files=@invoice1.pdf" \
-  -F "files=@invoice2.pdf"
-
-# Poll status
-curl http://localhost:8000/api/v1/documents/{id}/status
-
-# Get extraction result
-curl http://localhost:8000/api/v1/documents/{id}/result | python3 -m json.tool
-```
-
-</details>
-
-<details>
-<summary><strong>Export results</strong></summary>
-
-```bash
-# Flat CSV (ready for Excel or accounting systems)
-curl "http://localhost:8000/api/v1/exports/csv?document_type=invoice&status=completed" \
-  -o invoices.csv
-
-# Styled Excel workbook with frozen header row
-curl http://localhost:8000/api/v1/exports/xlsx -o documents.xlsx
-
-# Full extraction payloads as JSON array
-curl http://localhost:8000/api/v1/exports/json -o batch.json
-```
-
-</details>
-
-<details>
-<summary><strong>Purchase order matching (3-way)</strong></summary>
-
-```bash
-# Register a PO
-curl -X POST http://localhost:8000/api/v1/purchase-orders \
-  -H "Content-Type: application/json" \
-  -d '{"po_number":"PO-2024-001","vendor_name":"Acme Ltd","total_amount":1200.0}'
-
-# Match an uploaded invoice against registered POs
-curl -X POST http://localhost:8000/api/v1/purchase-orders/match/{document_id}
-```
-
-Match scoring: PO number exact match (40 pts) + vendor fuzzy match (30 pts) + amount ±1% tolerance (30 pts).
-Result: `matched` (≥85%) · `partial` (50–85%) · `unmatched`.
-
-</details>
-
-<details>
-<summary><strong>Duplicate and fraud detection</strong></summary>
-
-```bash
-curl -X POST http://localhost:8000/api/v1/deduplication/{id}/check
-```
-
-Returns a risk report with four independent signals:
-
-| Signal | Trigger |
-|---|---|
-| `exact_duplicate` | Byte-for-byte SHA-256 hash match |
-| `invoice_number_collision` | Same invoice number already in database |
-| `amount_anomaly` | Total >3σ from vendor historical mean (min 5 invoices) |
-| `vendor_velocity` | Vendor submitted >20 invoices in last 24 hours |
-
-Risk levels: `clean` · `low` · `medium` · `high`
-
-</details>
-
-<details>
-<summary><strong>Human review workflow</strong></summary>
-
-```bash
-# List tasks needing review (includes page number + bbox + validation reason)
-curl http://localhost:8000/api/v1/reviews/pending | python3 -m json.tool
-
-# Submit a correction
-curl -X POST http://localhost:8000/api/v1/reviews/{task_id}/decision \
-  -H "Content-Type: application/json" \
-  -d '{"decision":"corrected","corrected_value":"INV-2024-001","reviewer":"analyst","comment":"OCR misread digit"}'
-```
-
-</details>
-
-<details>
-<summary><strong>Webhooks (HMAC-SHA256 signed)</strong></summary>
-
-```bash
-# Register a webhook endpoint
-curl -X POST http://localhost:8000/api/v1/webhooks \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://your.server/hook","events":["processing_completed","review_required"]}'
-```
-
-Events fired: `processing_completed` · `processing_failed` · `review_required`
-
-Each request includes an `X-Signature-SHA256` header for payload verification.
-
-</details>
-
-<details>
-<summary><strong>Active learning — corrections export</strong></summary>
-
-```bash
-# Export corrections as labelled training data
-curl "http://localhost:8000/api/v1/analytics/corrections?document_type=invoice"
-
-# Field failure statistics
-curl http://localhost:8000/api/v1/analytics/corrections/stats
-```
-
-</details>
-
----
-
-## Extraction Output Schema
-
-```json
-{
-  "document_type": "invoice",
-  "schema_version": "2.0",
-  "source_file": "invoice_001.pdf",
-  "fields": {
-    "invoice_number": "INV-001",
-    "invoice_date": "2025-08-01",
-    "vendor_name": "Acme Supplies Ltd",
-    "customer_name": "Northwind Retail LLC",
-    "subtotal": 1000.0,
-    "tax": 200.0,
-    "total_amount": 1200.0
-  },
-  "line_items": [
-    {
-      "description": "Consulting Services",
-      "quantity": 5,
-      "unit_price": 200.0,
-      "line_total": 1000.0
-    }
-  ],
-  "field_confidences": [
-    {
-      "name": "invoice_number",
-      "value": "INV-001",
-      "confidence": 0.92,
-      "requires_review": false
-    }
-  ],
-  "document_confidence": 0.89,
-  "validation_results": [
-    {
-      "field": "total_amount",
-      "valid": true,
-      "reason": null
-    }
-  ]
-}
-```
-
----
-
-## Running Tests
-
-```bash
-# All tests
 pytest -v --tb=short
-
-# With coverage report
-pytest --cov=app --cov-report=term-missing
-
-# Single test file
-pytest tests/test_validators.py -v
 ```
 
-| Test File | Cases | Coverage |
-|---|---|---|
-| `test_documents_api.py` | 9 | Upload, list, search, detail, delete, reprocess |
-| `test_review_api.py` | 5 | Review queue, decision submission |
-| `test_webhooks_api.py` | 5 | Registration, HMAC signing |
-| `test_extractor_pipeline.py` | 9 | Invoice + bank statement extraction |
-| `test_classifier.py` | 9 | All four document types |
-| `test_confidence.py` | 8 | Field and document scoring |
-| `test_validators.py` | 18 | Dates, amounts, IBAN, cross-field |
-| `test_analytics_api.py` | 7 | Metrics, corrections, audit |
-| `test_new_features.py` | 12 | PO matching, dedup, exports |
-| `test_http_runtime.py` | 11 | Rate limiting, metrics middleware |
-| `test_startup_smoke.py` | 3 | App import, route count, health |
-| **Total** | **110** | |
+Tests cover API routes, OCR pipeline, schema extraction, retrieval, draft generation, and the preference learning loop.
 
 ---
 
-## Database Migrations
-
-```bash
-alembic upgrade head         # apply all pending migrations
-alembic current              # check current state
-alembic history              # show migration history
-alembic downgrade -1         # rollback one step
-```
-
-| Migration | Adds |
-|---|---|
-| `0001_initial_schema` | Core tables: `documents`, `extraction_results`, `review_tasks`, `review_decisions`, `audit_logs` |
-| `0002_add_evidence_corrections_utc` | Page evidence on review tasks, `CorrectionRecord`, UTC timestamps |
-| `0003_add_po_matching_deduplication` | `PurchaseOrder` + `POMatch` tables |
-| `0004_add_correlation_id_and_dead_letter` | Correlation IDs, dead-letter support |
-
----
-
-## Observability
-
-Prometheus metrics are exported at `GET /metrics`. Key metrics:
-
-| Metric | Type | Description |
-|---|---|---|
-| `docintel_http_requests_total` | Counter | Request count by method, path, status |
-| `docintel_http_request_duration_seconds` | Histogram | Request latency by method, path |
-| `docintel_documents_uploaded_total` | Counter | Uploads by tenant |
-
-Import the included Grafana provisioning from `infra/grafana/provisioning/` or connect Grafana to the Prometheus instance at `http://prometheus:9090`.
-
-Rate limit headers are returned on every request:
+## Project structure
 
 ```
-X-RateLimit-Limit: 120
-X-RateLimit-Remaining: 119
-X-RateLimit-Reset: 42
+app/
+  api/v1/routes/        — FastAPI route handlers
+  classification/       — TF-IDF + keyword document classifier
+  core/                 — config, logging, metrics
+  db/                   — SQLAlchemy models (Document, DocumentChunk,
+  |                       DraftOutput, DraftEdit, DraftPreference …)
+  extraction/
+    schemas/            — per-document-type YAML extraction schemas
+    schema_extractor.py — regex pre-pass + Gemini fill
+  ocr/
+    preprocessing.py    — deskew · denoise · CLAHE · binarize
+    paddle_ocr.py       — PaddleOCR provider
+    tesseract_ocr.py    — Tesseract provider
+    trocr_ocr.py        — TrOCR handwriting provider
+    auto_ocr.py         — confidence-based auto-routing
+    factory.py          — engine selection
+  rag/
+    draft_service.py    — retrieval + draft generation + edit capture
+    draft_templates/    — per-draft-type YAML section plans
+    preference_service.py — preference extraction + scoring
+    retrieval_service.py  — BGE + pgvector search
+    gemini_client.py    — Gemini wrapper with JSON parse + retry
+  utils/
+    pdf.py              — PyMuPDF rendering
+docs/
+  architecture.md       — detailed architecture notes
+sample_docs/            — synthetic sample documents and example outputs
+tests/
 ```
 
 ---
 
-## LLM Fallback Extraction
+## Design decisions
 
-When enabled, fields that could not be extracted by the deterministic pipeline are sent to Claude Haiku for recovery. Only `null` fields are re-extracted — deterministic results are never overwritten.
+**Why regex pre-pass before LLM extraction?**
+Deterministic regex is fast, free, and fully auditable. The LLM fill only runs for fields the regex couldn't find — this keeps costs low and avoids hallucination on fields that regex handles reliably (case numbers, dates, statute citations).
 
-```env
-LLM_EXTRACTION_ENABLED=true
-ANTHROPIC_API_KEY=sk-ant-...
-```
+**Why per-section retrieval queries?**
+A single query for "internal memo" returns chunks biased toward whatever words appear most in the document. Running one targeted query per section (e.g. "jurisdiction venue 28 U.S.C. 1331" for the jurisdiction section) produces much more relevant context for each part of the draft.
 
----
+**Why scale preference penalties by edit coverage?**
+With a flat binary penalty, editing one typo in a six-section memo would penalise a good jurisdiction preference as much as a fully rewritten draft. Section-proportional scoring lets good rules survive minor editorial corrections.
 
-## Email Ingestion (IMAP)
-
-Configure to automatically poll a mailbox and enqueue PDF attachments:
-
-```env
-EMAIL_IMAP_HOST=imap.gmail.com
-EMAIL_ADDRESS=ap@yourcompany.com
-EMAIL_PASSWORD=your-app-password
-EMAIL_FOLDER=INBOX
-EMAIL_MAX_ATTACHMENTS_PER_RUN=50
-```
-
-The Celery beat schedule for polling (every 5 minutes):
-
-```python
-celery_app.conf.beat_schedule = {
-    "poll-email": {
-        "task": "app.workers.tasks.poll_email_task",
-        "schedule": 300.0
-    }
-}
-```
-
----
-
-## Project Structure
-
-```
-├── app/
-│   ├── api/v1/routes/      — FastAPI route handlers
-│   ├── classification/     — TF-IDF + regex + fuzzy document classifier
-│   ├── core/               — config, logging, metrics, rate limiter
-│   ├── db/                 — SQLAlchemy models + session
-│   ├── extraction/         — per-type extractors (invoice, bank_statement, receipt, contract)
-│   ├── ocr/                — OCR providers (Tesseract, PaddleOCR) + factory
-│   ├── pipelines/          — document pipeline + confidence scorer
-│   ├── schemas/            — Pydantic request/response models
-│   ├── services/           — business logic (document, review, PO, dedup, export, LLM, webhook)
-│   ├── storage/            — storage backends (local, S3) + factory
-│   ├── utils/              — validators, text normalisation, PDF utilities
-│   └── workers/            — Celery app + task definitions
-├── alembic/                — database migrations
-├── evaluation/             — benchmark scripts, dataset, ground truth, results
-├── frontend/               — single-file HTML frontend (served by FastAPI)
-├── infra/                  — Prometheus config, Grafana provisioning
-├── review_ui/              — Streamlit human-review interface
-├── sample_docs/            — sample PDFs for quick testing
-├── scripts/                — demo, evaluation, calibration, retrain scripts
-├── tests/                  — 110 pytest tests
-├── docker-compose.yml
-├── Dockerfile              — multi-stage, non-root user, healthcheck
-└── pyproject.toml
-```
-
----
-
-## Known Limitations
-
-| Limitation | Planned Fix |
-|---|---|
-| Rate limiter uses a fixed window — susceptible to boundary burst | Sliding window / token bucket via Redis (redis-cell) |
-| In-memory rate limiter does not share state across replicas | Set `REDIS_RATE_LIMIT_URL` to enable the Redis-backed limiter |
-| `subtotal` recall = 85.7% | Layout variation; derive from line-item sum when direct extraction fails |
-| No OAuth/JWT authentication | Static API keys are adequate for single-tenant deployments |
-| Synthetic evaluation dataset only | SROIE / FUNSD benchmark integration planned |
-
----
-
-## Roadmap
-
-- [ ] Sliding-window Redis rate limiter
-- [ ] CI/CD pipeline (GitHub Actions — pytest, ruff, mypy, docker build)
-- [ ] LayoutLMv3 / Donut fine-tune for noisy document extraction
-- [ ] SROIE and FUNSD public benchmark evaluation
-- [ ] JWT / OAuth2 tenant authentication
-- [ ] OpenTelemetry distributed tracing
-- [ ] Idempotent re-upload (SHA-256 content deduplication at ingest)
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE) for details.
+**Why TrOCR only as a fallback?**
+TrOCR loads a 350MB transformer model and processes one line crop at a time — it is 10–30× slower than Tesseract. Routing to it only on low-confidence pages keeps the happy path fast while still handling genuinely degraded or handwritten input.

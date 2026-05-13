@@ -16,6 +16,7 @@ from app.rag.embedder import get_embedder
 class RetrievedChunk:
     chunk_id: str
     document_id: str
+    chunk_index: int
     page_number: int
     section_header: str | None
     text: str
@@ -79,12 +80,12 @@ class RetrievalService:
             text(
                 """
                 WITH scored AS (
-                    SELECT id, document_id, page_number, section_header, text,
+                    SELECT id, document_id, chunk_index, page_number, section_header, text,
                            1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
                     FROM document_chunks
                     WHERE document_id = :document_id
                 )
-                SELECT id, document_id, page_number, section_header, text, similarity
+                SELECT id, document_id, chunk_index, page_number, section_header, text, similarity
                 FROM scored
                 WHERE similarity >= :min_score
                 ORDER BY similarity DESC
@@ -102,6 +103,7 @@ class RetrievalService:
             RetrievedChunk(
                 chunk_id=row["id"],
                 document_id=row["document_id"],
+                chunk_index=row["chunk_index"],
                 page_number=row["page_number"],
                 section_header=row["section_header"],
                 text=row["text"],
@@ -129,6 +131,7 @@ class RetrievalService:
             RetrievedChunk(
                 chunk_id=chunk.id,
                 document_id=chunk.document_id,
+                chunk_index=chunk.chunk_index,
                 page_number=chunk.page_number,
                 section_header=chunk.section_header,
                 text=chunk.text,

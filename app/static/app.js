@@ -25,6 +25,41 @@ function confColor(v) {
   return '#A32D2D';
 }
 
+function fieldLabel(k) {
+  return String(k).replaceAll('_', ' ');
+}
+
+function formatObjectField(v) {
+  if ('present' in v) {
+    if (!v.present) return '—';
+    return v.snippet || 'present';
+  }
+  if ('name' in v && 'role' in v) {
+    return [v.name, v.role ? `(${v.role})` : ''].filter(Boolean).join(' ');
+  }
+  if ('name' in v && 'date' in v) {
+    return [v.name, v.date].filter(Boolean).join(' - ');
+  }
+  if ('type' in v && 'jurisdiction' in v) {
+    return [v.type, v.jurisdiction].filter(Boolean).join(' - ');
+  }
+
+  const parts = Object.entries(v)
+    .filter(([, value]) => value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => `${fieldLabel(key)}: ${formatFieldValue(value)}`);
+  return parts.length ? parts.join('\n') : '—';
+}
+
+function formatFieldValue(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (Array.isArray(v)) {
+    const parts = v.map(formatFieldValue).filter((part) => part && part !== '—');
+    return parts.length ? parts.join('\n') : '—';
+  }
+  if (typeof v === 'object') return formatObjectField(v);
+  return String(v);
+}
+
 function statusBadge(s) {
   const map = {
     completed: 'badge-success',
@@ -448,7 +483,7 @@ document.addEventListener('alpine:init', () => {
       fmtConf,
       confColor,
       formatBytes,
-      fmtField: v => (v == null ? '—' : String(v)),
+      fmtField: formatFieldValue,
     };
   });
 });

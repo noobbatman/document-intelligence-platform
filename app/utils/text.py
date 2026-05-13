@@ -7,6 +7,7 @@ Key additions over v0.3.0:
 - Systematic character table:  covers all OCR confusion pairs seen in benchmark
 - Regex order matters: broad → narrow, so earlier rules don't break later ones
 """
+
 import re
 from typing import Any
 
@@ -21,8 +22,7 @@ _OCR_SUBS = [
     # "STAT EMENT" → "STATEMENT"
     (r"\bSTAT\s+EMENT\b", "STATEMENT"),
     (r"\bACC\s+OUNT\b", "ACCOUNT"),
-    (r"\bPERI\s+OD\b",  "PERIOD"),
-
+    (r"\bPERI\s+OD\b", "PERIOD"),
     # ── Whole-word OCR typos (most impactful for classification) ─────────────
     (r"\blnv(?=oice|\s*N(?:o|0)\.?\s*[:#])", "Inv"),
     (r"\blnv\b", "INV"),
@@ -51,7 +51,6 @@ _OCR_SUBS = [
     (r"\bSubt0tal\b", "Subtotal"),
     (r"\bFr0m\b", "From"),
     (r"\bFR0M\b", "FROM"),
-
     # ── Invoice-specific ──────────────────────────────────────────────────────
     (r"\blnv0ice\b", "Invoice"),
     (r"\blNVOICE\b", "INVOICE"),
@@ -59,17 +58,14 @@ _OCR_SUBS = [
     (r"\bINV0ICE\b", "INVOICE"),
     (r"\bN0\b(?=\s*[.:#]?\s*[A-Z0-9])", "No"),
     (r"\bN0\.\b", "No."),
-
     # ── Bank statement specific ───────────────────────────────────────────────
     (r"\bBal\b(?=\s*[:#]?\s*[\d£$€])", "Balance"),
     (r"\bBAL\b(?=\s*[:#]?\s*[\d£$€])", "BALANCE"),
-
     # ── Character-level substitutions in context ──────────────────────────────
     (r"(?<=[A-Z]{2})0(?=[A-Z\-])", "O"),
     (r"\bl(?=[A-Z]{2,})", "I"),
     (r"(?<=[A-Z])1(?=[A-Z]{2,})", "I"),
     (r"\bINV-(\d)O(\d{2})\b", r"INV-\g<1>0\g<2>"),
-
     # ── Deb1t / Cred1t in headers ────────────────────────────────────────────
     (r"\bDeb1ts\b", "Debits"),
     (r"\bCred1ts\b", "Credits"),

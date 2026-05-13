@@ -1,4 +1,5 @@
 """Integration tests for document upload, listing, and status endpoints."""
+
 from __future__ import annotations
 
 from io import BytesIO
@@ -8,8 +9,8 @@ from app.api.deps import db_dependency
 from app.db.models import Document, DocumentStatus, ExtractionResult
 from app.main import app
 
-
 # ── Health ────────────────────────────────────────────────────────────────────
+
 
 def test_liveness_endpoint(client) -> None:
     response = client.get("/api/v1/health/live")
@@ -64,6 +65,7 @@ def test_readiness_returns_503_when_redis_unavailable(client) -> None:
 
 # ── Upload ────────────────────────────────────────────────────────────────────
 
+
 def _fake_task():
     m = MagicMock()
     m.id = "task-abc-123"
@@ -78,7 +80,13 @@ def test_upload_document_returns_202(client, monkeypatch) -> None:
     )
     response = client.post(
         "/api/v1/documents/upload",
-        files={"file": ("invoice.pdf", BytesIO(b"%PDF-1.4 Invoice Number INV-001 Total $12.00"), "application/pdf")},
+        files={
+            "file": (
+                "invoice.pdf",
+                BytesIO(b"%PDF-1.4 Invoice Number INV-001 Total $12.00"),
+                "application/pdf",
+            )
+        },
     )
     assert response.status_code == 202, response.text
     payload = response.json()
@@ -119,6 +127,7 @@ def test_upload_high_priority(client, monkeypatch) -> None:
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
+
 
 def test_list_documents_empty(client) -> None:
     response = client.get("/api/v1/documents")
@@ -162,6 +171,7 @@ def test_list_documents_status_filter(client, monkeypatch) -> None:
 
 
 # ── Detail / status ───────────────────────────────────────────────────────────
+
 
 def test_get_document_not_found(client) -> None:
     response = client.get("/api/v1/documents/nonexistent-id")
@@ -221,6 +231,7 @@ def test_get_document_detail_includes_detected_document_type(client, db_session)
 
 # ── Search ────────────────────────────────────────────────────────────────────
 
+
 def test_search_returns_list(client, monkeypatch) -> None:
     monkeypatch.setattr(
         "app.api.v1.routes.documents.process_document_task.delay",
@@ -238,6 +249,7 @@ def test_search_returns_list(client, monkeypatch) -> None:
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
+
 
 def test_delete_document(client, monkeypatch) -> None:
     monkeypatch.setattr(

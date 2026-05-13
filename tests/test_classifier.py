@@ -1,4 +1,5 @@
 """Unit tests for HybridDocumentClassifier."""
+
 from __future__ import annotations
 
 import pytest
@@ -74,7 +75,6 @@ class TestUnknownDocument:
     def test_gibberish_returns_unknown(self, clf) -> None:
         result = clf.classify("xyzzy lorem ipsum dolor sit amet consectetur")
         assert result.label == "unknown"
-
 
 
 class TestConfidenceRange:

@@ -1,4 +1,5 @@
 """Review queue endpoints — list pending tasks, submit decisions, tenant-scoped."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -12,7 +13,7 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("/pending", response_model=list[ReviewTaskRead])
-@router.get("/queue",   response_model=list[ReviewTaskRead])
+@router.get("/queue", response_model=list[ReviewTaskRead])
 def list_review_queue(
     db: Session = Depends(db_dependency),
     tenant_id: str | None = Depends(get_optional_tenant),
@@ -40,7 +41,7 @@ def submit_review_decision(
     db: Session = Depends(db_dependency),
     tenant_id: str | None = Depends(get_optional_tenant),
 ) -> ReviewDecisionResponse:
-    svc  = ReviewService(db)
+    svc = ReviewService(db)
     task = svc.submit_decision(task_id, payload, tenant_id=tenant_id)
     orig = task.original_value.get("value")
     corr = payload.corrected_value.get("value")

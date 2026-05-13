@@ -6,19 +6,18 @@ Checks performed:
   3. Amount anomaly — invoice total deviates >3σ from vendor historical mean
   4. Velocity check — same vendor submitted >N invoices in last 24 hours
 """
+
 from __future__ import annotations
 
 import hashlib
-import re
 import statistics
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditEventType, Document, DocumentStatus, ExtractionResult
+from app.db.models import Document, DocumentStatus, ExtractionResult
 
 
 def _sha256(path: str) -> str | None:
@@ -37,9 +36,9 @@ class DeduplicationService:
     """Run duplicate + fraud checks before or after pipeline processing."""
 
     VELOCITY_WINDOW_HOURS = 24
-    VELOCITY_MAX_PER_VENDOR = 20    # flag if vendor submits >20 invoices/day
-    ANOMALY_MIN_HISTORY = 5         # need at least 5 past invoices to flag anomaly
-    ANOMALY_SIGMA_THRESHOLD = 3.0   # flag if amount > mean + 3*stdev
+    VELOCITY_MAX_PER_VENDOR = 20  # flag if vendor submits >20 invoices/day
+    ANOMALY_MIN_HISTORY = 5  # need at least 5 past invoices to flag anomaly
+    ANOMALY_SIGMA_THRESHOLD = 3.0  # flag if amount > mean + 3*stdev
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -58,23 +57,27 @@ class DeduplicationService:
             if sha:
                 dup = self._find_by_hash(sha, exclude_id=document.id)
                 if dup:
-                    findings.append({
-                        "type":     "exact_duplicate",
-                        "severity": "high",
-                        "detail":   f"Byte-for-byte duplicate of document {dup.id} ({dup.filename})",
-                        "duplicate_document_id": dup.id,
-                    })
+                    findings.append(
+                        {
+                            "type": "exact_duplicate",
+                            "severity": "high",
+                            "detail": f"Byte-for-byte duplicate of document {dup.id} ({dup.filename})",
+                            "duplicate_document_id": dup.id,
+                        }
+                    )
                     risk_score += 0.8
 
         # 2. Invoice number + vendor collision
         inv_dup = self._find_invoice_number_collision(document)
         if inv_dup:
-            findings.append({
-                "type":     "invoice_number_collision",
-                "severity": "high",
-                "detail":   f"Invoice number already exists in document {inv_dup.id}",
-                "duplicate_document_id": inv_dup.id,
-            })
+            findings.append(
+                {
+                    "type": "invoice_number_collision",
+                    "severity": "high",
+                    "detail": f"Invoice number already exists in document {inv_dup.id}",
+                    "duplicate_document_id": inv_dup.id,
+                }
+            )
             risk_score += 0.7
 
         # 3. Amount anomaly
@@ -90,11 +93,11 @@ class DeduplicationService:
             risk_score += 0.3
 
         return {
-            "document_id":   document.id,
-            "risk_score":    round(min(risk_score, 1.0), 3),
-            "risk_level":    self._risk_level(risk_score),
-            "findings":      findings,
-            "checked_at":    datetime.now(timezone.utc).isoformat(),
+            "document_id": document.id,
+            "risk_score": round(min(risk_score, 1.0), 3),
+            "risk_level": self._risk_level(risk_score),
+            "findings": findings,
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
     def store_hash(self, document: Document) -> str | None:
@@ -132,6 +135,7 @@ class DeduplicationService:
         # Select only the payload column to avoid N+1 lazy-loads on extraction_result.
         # Vendor-agnostic: invoice numbers should be globally unique within a tenant.
         from sqlalchemy.orm import joinedload
+
         stmt = (
             select(Document)
             .options(joinedload(Document.extraction_result))
@@ -204,15 +208,15 @@ class DeduplicationService:
         z_score = abs(current_total - mean) / stdev
         if z_score > self.ANOMALY_SIGMA_THRESHOLD:
             return {
-                "type":     "amount_anomaly",
+                "type": "amount_anomaly",
                 "severity": "medium",
-                "detail":   (
+                "detail": (
                     f"Total {current_total:.2f} is {z_score:.1f}σ from vendor mean "
                     f"{mean:.2f} (±{stdev:.2f}, n={len(historical)})"
                 ),
-                "z_score":          round(z_score, 2),
-                "vendor_mean":      round(mean, 2),
-                "vendor_stdev":     round(stdev, 2),
+                "z_score": round(z_score, 2),
+                "vendor_mean": round(mean, 2),
+                "vendor_stdev": round(stdev, 2),
                 "historical_count": len(historical),
             }
         return None
@@ -226,7 +230,7 @@ class DeduplicationService:
             return None
 
         vendor_prefix = vendor[:20].lower()
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=self.VELOCITY_WINDOW_HOURS)
+        cutoff = datetime.now(UTC) - timedelta(hours=self.VELOCITY_WINDOW_HOURS)
 
         # Select only the payload column to avoid N+1 lazy-loads when iterating candidates.
         stmt = (
@@ -240,23 +244,28 @@ class DeduplicationService:
             )
         )
         count = sum(
-            1 for payload in self.db.scalars(stmt)
-            if vendor_prefix in str((payload or {}).get("fields", {}).get("vendor_name", "")).lower()
+            1
+            for payload in self.db.scalars(stmt)
+            if vendor_prefix
+            in str((payload or {}).get("fields", {}).get("vendor_name", "")).lower()
         )
 
         if count >= self.VELOCITY_MAX_PER_VENDOR:
             return {
-                "type":     "vendor_velocity",
+                "type": "vendor_velocity",
                 "severity": "low",
-                "detail":   f"Vendor '{vendor[:40]}' submitted {count} invoices in last {self.VELOCITY_WINDOW_HOURS}h",
-                "count":    count,
+                "detail": f"Vendor '{vendor[:40]}' submitted {count} invoices in last {self.VELOCITY_WINDOW_HOURS}h",
+                "count": count,
                 "window_hours": self.VELOCITY_WINDOW_HOURS,
             }
         return None
 
     @staticmethod
     def _risk_level(score: float) -> str:
-        if score >= 0.7: return "high"
-        if score >= 0.4: return "medium"
-        if score > 0:    return "low"
+        if score >= 0.7:
+            return "high"
+        if score >= 0.4:
+            return "medium"
+        if score > 0:
+            return "low"
         return "clean"

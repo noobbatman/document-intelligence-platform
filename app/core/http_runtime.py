@@ -1,4 +1,5 @@
 """HTTP middleware helpers for request metrics and rate limiting."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -33,7 +34,9 @@ class InMemoryRateLimiter:
 
     def check(self, key: str, limit: int) -> RateLimitDecision:
         if limit <= 0:
-            return RateLimitDecision(allowed=True, limit=limit, remaining=limit, retry_after_seconds=0)
+            return RateLimitDecision(
+                allowed=True, limit=limit, remaining=limit, retry_after_seconds=0
+            )
 
         window = int(time() // 60)
         now = int(time())
@@ -81,7 +84,9 @@ class RedisRateLimiter:
 
     def check(self, key: str, limit: int) -> RateLimitDecision:
         if limit <= 0:
-            return RateLimitDecision(allowed=True, limit=limit, remaining=limit, retry_after_seconds=0)
+            return RateLimitDecision(
+                allowed=True, limit=limit, remaining=limit, retry_after_seconds=0
+            )
 
         now = int(time())
         window = now // 60
@@ -94,7 +99,9 @@ class RedisRateLimiter:
             pipe.expire(redis_key, 120)
             count, _ = pipe.execute()
         except Exception:
-            return RateLimitDecision(allowed=True, limit=limit, remaining=limit, retry_after_seconds=0)
+            return RateLimitDecision(
+                allowed=True, limit=limit, remaining=limit, retry_after_seconds=0
+            )
 
         allowed = count <= limit
         return RateLimitDecision(
@@ -138,9 +145,7 @@ def should_skip_rate_limit(request: Request, settings: Settings) -> bool:
         return True
     if path in {"/docs", "/redoc", f"{settings.api_v1_prefix}/openapi.json"}:
         return True
-    if path.endswith(("/health", "/health/live", "/health/ready")):
-        return True
-    return False
+    return path.endswith(("/health", "/health/live", "/health/ready"))
 
 
 def rate_limit_bucket(request: Request, settings: Settings) -> str:

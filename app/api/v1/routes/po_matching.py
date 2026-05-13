@@ -1,4 +1,5 @@
 """Purchase Order management and matching endpoints."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -6,40 +7,40 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import db_dependency, get_optional_tenant, require_api_key
-from app.services.po_matching_service import POMatchingService, PurchaseOrder, POMatch
 from app.services.document_service import DocumentService
+from app.services.po_matching_service import POMatchingService
 
 router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class POCreate(BaseModel):
-    po_number:    str
-    vendor_name:  str
+    po_number: str
+    vendor_name: str
     total_amount: float | None = None
-    currency:     str = "GBP"
-    line_items:   list = []
+    currency: str = "GBP"
+    line_items: list = []
 
 
 class PORead(BaseModel):
-    id:           str
-    po_number:    str
-    vendor_name:  str
+    id: str
+    po_number: str
+    vendor_name: str
     total_amount: float | None
-    currency:     str
-    status:       str
-    line_items:   list
-    model_config  = {"from_attributes": True}
+    currency: str
+    status: str
+    line_items: list
+    model_config = {"from_attributes": True}
 
 
 class POMatchRead(BaseModel):
-    id:             str
-    document_id:    str
-    po_id:          str | None
-    match_status:   str
-    match_score:    float
-    discrepancies:  list
+    id: str
+    document_id: str
+    po_id: str | None
+    match_status: str
+    match_score: float
+    discrepancies: list
     matched_fields: dict
-    model_config    = {"from_attributes": True}
+    model_config = {"from_attributes": True}
 
 
 @router.post("", response_model=PORead, status_code=201)
@@ -49,7 +50,7 @@ def register_po(
     tenant_id: str | None = Depends(get_optional_tenant),
 ) -> PORead:
     svc = POMatchingService(db)
-    po  = svc.register_po(
+    po = svc.register_po(
         po_number=body.po_number,
         vendor_name=body.vendor_name,
         total_amount=body.total_amount,

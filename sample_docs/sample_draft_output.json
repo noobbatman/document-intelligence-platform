@@ -1,0 +1,85 @@
+{
+  "_comment": "DraftOutput produced for sample_legal_complaint.txt — draft_type: internal_memo",
+  "draft_type": "internal_memo",
+  "status": "draft",
+  "word_count": 487,
+  "model_id": "gemini-2.5-flash",
+  "content": {
+    "sections": [
+      {
+        "key": "memo_header",
+        "title": "MEMORANDUM",
+        "confidence": "high",
+        "evidence_chunk_ids": [],
+        "content": "TO: Senior Partner\nFROM: Legal Document Analyst\nDATE: May 14, 2026\nSUBJECT: Cole v. Midwest Fidelity Bank, N.A. — Case No. 2:24-cv-00892-JPS — Initial Review"
+      },
+      {
+        "key": "case_overview",
+        "title": "I. Case Overview",
+        "confidence": "high",
+        "evidence_chunk_ids": [
+          "a1b2c3d4-0001-0001-0001-000000000001",
+          "a1b2c3d4-0001-0001-0001-000000000002"
+        ],
+        "content": "This matter involves a federal civil complaint filed on February 12, 2024 in the United States District Court for the Eastern District of Wisconsin, assigned Case No. 2:24-cv-00892-JPS. [Page 1]\n\nPlaintiffs Margaret A. Cole and Thomas B. Cole, both residents of Milwaukee County, Wisconsin, bring two counts against Defendant Midwest Fidelity Bank, N.A., a national banking association headquartered at 250 West Water Street, Milwaukee, Wisconsin 53202. [Page 1 - PARTIES]\n\nCount I alleges violation of the Right to Financial Privacy Act, 12 U.S.C. § 3401 et seq., arising from the Bank's disclosure of Plaintiffs' financial records to federal investigators without notice or compliance with statutory challenge procedures. Count II alleges negligence based on the Bank's destruction of account records subject to a litigation hold. [Page 3 - CLAIMS FOR RELIEF]"
+      },
+      {
+        "key": "jurisdiction_venue",
+        "title": "II. Jurisdiction and Venue",
+        "confidence": "high",
+        "evidence_chunk_ids": [
+          "a1b2c3d4-0001-0001-0001-000000000003"
+        ],
+        "content": "Federal question jurisdiction is asserted under 28 U.S.C. § 1331 and 28 U.S.C. § 1343. [Page 1 - JURISDICTION AND VENUE]\n\nVenue is asserted under 28 U.S.C. § 1391(b) on the basis that a substantial part of the events giving rise to the claims occurred in this district and that Defendant conducts substantial business here. [Page 1 - JURISDICTION AND VENUE]"
+      },
+      {
+        "key": "factual_background",
+        "title": "III. Factual Background",
+        "confidence": "high",
+        "evidence_chunk_ids": [
+          "a1b2c3d4-0001-0001-0001-000000000004",
+          "a1b2c3d4-0001-0001-0001-000000000005",
+          "a1b2c3d4-0001-0001-0001-000000000006"
+        ],
+        "content": "Plaintiffs have maintained personal checking, savings, and investment accounts with the Bank since 2009. [Page 2 - FACTUAL ALLEGATIONS]\n\nIn March 2023, federal investigators from the Department of Justice requested account records covering January 2020 through December 2022. On or about April 4, 2023, the Bank disclosed account statements, wire transfer records, check images, and loan documents to the investigators without providing Plaintiffs notice, challenge rights, or any opportunity to object as required by 12 U.S.C. §§ 3405-3407. [Page 2 - FACTUAL ALLEGATIONS]\n\nIn September 2023, defense counsel in a separate federal proceeding served the Bank with a litigation hold letter directing preservation of all records related to Plaintiffs' accounts. Despite this hold, the Bank's records management department destroyed monthly account statements for October 2021 through June 2022 during a routine purge in November 2023. [Page 2 - FACTUAL ALLEGATIONS]\n\nPlaintiffs learned of the unauthorized disclosure and document destruction in January 2024 upon receipt of the investigators' file through discovery in the related proceeding. [Page 2 - FACTUAL ALLEGATIONS]"
+      },
+      {
+        "key": "claims_asserted",
+        "title": "IV. Claims Asserted",
+        "confidence": "high",
+        "evidence_chunk_ids": [
+          "a1b2c3d4-0001-0001-0001-000000000007",
+          "a1b2c3d4-0001-0001-0001-000000000008"
+        ],
+        "content": "COUNT I — Right to Financial Privacy Act (12 U.S.C. § 3401 et seq.): Plaintiffs allege the Bank disclosed their financial records to federal investigators without complying with the notice and challenge procedures of 12 U.S.C. §§ 3405-3407. Plaintiffs are alleged to be 'customers' under § 3401(5) and the records are alleged to be 'financial records' under § 3401(2). The complaint further alleges resulting damages including emotional distress, reputational harm, and loss of privacy. [Page 3 - COUNT I]\n\nCOUNT II — Negligence (Litigation Hold): Plaintiffs allege the Bank owed and breached a duty of care to preserve records subject to a properly served litigation hold by destroying account statements during a routine November 2023 purge. Alleged damages include loss of documentary evidence and costs of reconstructing alternative records. [Page 3 - COUNT II]"
+      },
+      {
+        "key": "relief_sought",
+        "title": "V. Relief Sought",
+        "confidence": "high",
+        "evidence_chunk_ids": [
+          "a1b2c3d4-0001-0001-0001-000000000009"
+        ],
+        "content": "Plaintiffs seek the following relief [Page 4 - PRAYER FOR RELIEF]:\n\n• Judgment for violation of 12 U.S.C. § 3401 et seq.\n• Statutory damages under 12 U.S.C. § 3417(a): not less than $100 per day per violation, up to $10,000\n• Actual damages for emotional distress, reputational harm, and loss of privacy\n• Damages for negligent destruction of litigation-hold records (amount to be determined at trial)\n• Declaratory relief that Defendant's conduct violated RFPA\n• Preservation order for remaining account records\n• Attorneys' fees and costs under 12 U.S.C. § 3417(a)\n• Jury trial demanded on all triable issues"
+      },
+      {
+        "key": "risks_gaps",
+        "title": "VI. Risks and Gaps",
+        "confidence": "medium",
+        "evidence_chunk_ids": [],
+        "content": "Statute of limitations: RFPA claims under 12 U.S.C. § 3417 carry a 3-year limitations period. The alleged disclosure occurred April 4, 2023; the complaint was filed February 12, 2024 — well within the window. [Page 2 - FACTUAL ALLEGATIONS]\n\nDiscovery of harm: Plaintiffs allege they learned of the disclosure and destruction in January 2024 through discovery in the related proceeding. Whether a discovery-rule tolling argument is necessary turns on when the claim accrued — this is not addressed in the complaint.\n\nScope of the litigation hold: The complaint alleges a litigation hold letter was served on the Bank but does not quote or attach it. Whether the destroyed records (October 2021 – June 2022 statements) fell within the temporal scope of the hold is a factual question not resolved by the complaint.\n\nRelated proceeding: [UNSUPPORTED: The complaint references a separate federal proceeding in which Plaintiffs are witnesses, but does not identify its caption, docket number, or jurisdiction. This information is not present in the source document and could be material to assessing overlapping claims or discovery coordination.]"
+      }
+    ]
+  },
+  "evidence_chunk_ids": [
+    "a1b2c3d4-0001-0001-0001-000000000001",
+    "a1b2c3d4-0001-0001-0001-000000000002",
+    "a1b2c3d4-0001-0001-0001-000000000003",
+    "a1b2c3d4-0001-0001-0001-000000000004",
+    "a1b2c3d4-0001-0001-0001-000000000005",
+    "a1b2c3d4-0001-0001-0001-000000000006",
+    "a1b2c3d4-0001-0001-0001-000000000007",
+    "a1b2c3d4-0001-0001-0001-000000000008",
+    "a1b2c3d4-0001-0001-0001-000000000009"
+  ]
+}

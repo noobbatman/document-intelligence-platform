@@ -56,6 +56,13 @@ class Settings(BaseSettings):
 
     # ── OCR ───────────────────────────────────────────────────────────────────
     ocr_engine:   str = Field(default="tesseract", alias="OCR_ENGINE")
+    ocr_preprocess: bool = Field(default=True, alias="OCR_PREPROCESS")
+    ocr_deskew: bool = Field(default=True, alias="OCR_DESKEW")
+    ocr_denoise: bool = Field(default=True, alias="OCR_DENOISE")
+    ocr_enhance_contrast: bool = Field(default=True, alias="OCR_ENHANCE_CONTRAST")
+    ocr_engine_primary: str = Field(default="tesseract", alias="OCR_ENGINE_PRIMARY")
+    handwriting_confidence_threshold: float = Field(default=0.70, alias="HANDWRITING_CONFIDENCE_THRESHOLD")
+    pdf_render_zoom: float = Field(default=3.0, alias="PDF_RENDER_ZOOM")
     spacy_model:  str = Field(default="en_core_web_sm", alias="SPACY_MODEL")
 
     # ── Pipeline ──────────────────────────────────────────────────────────────
@@ -96,7 +103,7 @@ class Settings(BaseSettings):
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     draft_model: str = Field(default="gemini-2.5-flash", alias="DRAFT_MODEL")
     draft_max_chunks: int = Field(default=10, alias="DRAFT_MAX_CHUNKS")
-    draft_max_tokens: int = Field(default=2000, alias="DRAFT_MAX_TOKENS")
+    draft_max_tokens: int = Field(default=8192, alias="DRAFT_MAX_TOKENS")
     preference_dedup_threshold: float = Field(default=0.85, alias="PREFERENCE_DEDUP_THRESHOLD")
     preference_max_per_draft: int = Field(default=5, alias="PREFERENCE_MAX_PER_DRAFT")
 

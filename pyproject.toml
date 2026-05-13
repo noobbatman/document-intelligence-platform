@@ -21,6 +21,7 @@ dependencies = [
   "sqlalchemy>=2.0.35",
   "psycopg[binary]>=3.2.1",
   "alembic>=1.13.0",
+  "pgvector>=0.3.0",
   # Config / validation
   "pydantic>=2.8.2",
   "pydantic-settings>=2.4.0",
@@ -37,6 +38,9 @@ dependencies = [
   "spacy>=3.7.6",
   "python-dateutil>=2.9.0.post0",
   "rapidfuzz>=3.9.7",
+  "langchain>=0.3.0",
+  "langchain-google-genai>=2.0.0",
+  "langchain-postgres>=0.0.9",
   # S3 / cloud storage
   "boto3>=1.35.0",
   # Observability
@@ -83,7 +87,7 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = ["E501", "B008", "B904", "SIM102", "SIM105", "SIM115"]
 
 [tool.mypy]
 python_version = "3.11"

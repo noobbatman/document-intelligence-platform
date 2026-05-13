@@ -5,6 +5,7 @@ Three-way match: Invoice ↔ Purchase Order ↔ (optional) Goods Receipt.
 Model definitions live in app.db.models (Fix: removed duplicate Base-derived
 classes that previously shadowed the Alembic-managed schema).
 """
+
 from __future__ import annotations
 
 import re
@@ -18,7 +19,9 @@ from app.db.models import Document, POMatch, PurchaseOrder
 def _normalize_vendor(name: str | None) -> str:
     if not name:
         return ""
-    s = re.sub(r"\b(?:ltd|limited|inc|corp|corporation|llc|plc|gmbh|srl|sarl|bv)\b", "", name, flags=re.I)
+    s = re.sub(
+        r"\b(?:ltd|limited|inc|corp|corporation|llc|plc|gmbh|srl|sarl|bv)\b", "", name, flags=re.I
+    )
     return re.sub(r"\s+", " ", s).strip().lower()
 
 
@@ -77,9 +80,11 @@ class POMatchingService:
 
         candidates: list[PurchaseOrder] = []
         if inv_po_ref:
-            exact = list(self.db.scalars(
-                select(PurchaseOrder).where(PurchaseOrder.po_number == str(inv_po_ref))
-            ))
+            exact = list(
+                self.db.scalars(
+                    select(PurchaseOrder).where(PurchaseOrder.po_number == str(inv_po_ref))
+                )
+            )
             candidates.extend(exact)
 
         norm_vendor = _normalize_vendor(inv_vendor)
@@ -87,8 +92,10 @@ class POMatchingService:
             all_pos = list(self.db.scalars(select(PurchaseOrder)))
             for po in all_pos:
                 if po not in candidates:
-                    if norm_vendor in _normalize_vendor(po.vendor_name) or \
-                       _normalize_vendor(po.vendor_name) in norm_vendor:
+                    if (
+                        norm_vendor in _normalize_vendor(po.vendor_name)
+                        or _normalize_vendor(po.vendor_name) in norm_vendor
+                    ):
                         candidates.append(po)
 
         if not candidates:
@@ -120,7 +127,9 @@ class POMatchingService:
                 best_discrepancies = discrepancies
                 best_matched = matched
 
-        status = "matched" if best_score >= 0.85 else "partial" if best_score >= 0.50 else "unmatched"
+        status = (
+            "matched" if best_score >= 0.85 else "partial" if best_score >= 0.50 else "unmatched"
+        )
         return self._save_match(
             document.id,
             best_po.id if best_po else None,
@@ -150,12 +159,14 @@ class POMatchingService:
             score += 0.40
             matched["po_number"] = po.po_number
         elif inv_po_ref:
-            discrepancies.append({
-                "field": "purchase_order",
-                "invoice": inv_po_ref,
-                "po": po.po_number,
-                "issue": "PO number mismatch",
-            })
+            discrepancies.append(
+                {
+                    "field": "purchase_order",
+                    "invoice": inv_po_ref,
+                    "po": po.po_number,
+                    "issue": "PO number mismatch",
+                }
+            )
 
         inv_norm = _normalize_vendor(inv_vendor)
         po_norm = _normalize_vendor(po.vendor_name)
@@ -163,29 +174,39 @@ class POMatchingService:
             score += 0.30
             matched["vendor_name"] = po.vendor_name
         elif inv_vendor:
-            discrepancies.append({
-                "field": "vendor_name",
-                "invoice": inv_vendor,
-                "po": po.vendor_name,
-                "issue": "Vendor name mismatch",
-            })
+            discrepancies.append(
+                {
+                    "field": "vendor_name",
+                    "invoice": inv_vendor,
+                    "po": po.vendor_name,
+                    "issue": "Vendor name mismatch",
+                }
+            )
 
         if _amount_match(inv_total, po.total_amount):
             score += 0.30
             matched["total_amount"] = po.total_amount
         elif inv_total is not None and po.total_amount is not None:
             pct_diff = abs(inv_total - po.total_amount) / max(po.total_amount, 1) * 100
-            discrepancies.append({
-                "field": "total_amount",
-                "invoice": inv_total,
-                "po": po.total_amount,
-                "issue": f"Amount differs by {pct_diff:.1f}%",
-            })
+            discrepancies.append(
+                {
+                    "field": "total_amount",
+                    "invoice": inv_total,
+                    "po": po.total_amount,
+                    "issue": f"Amount differs by {pct_diff:.1f}%",
+                }
+            )
 
         return score, discrepancies, matched
 
     def _save_match(
-        self, document_id: str, po_id: str | None, status: str, score: float, discrepancies: list, matched: dict
+        self,
+        document_id: str,
+        po_id: str | None,
+        status: str,
+        score: float,
+        discrepancies: list,
+        matched: dict,
     ) -> POMatch:
         existing = self.get_match(document_id)
         if existing:

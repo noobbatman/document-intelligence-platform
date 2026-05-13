@@ -1,0 +1,13 @@
+{
+  "document_type": "legal_notice",
+  "llm_fill": true,
+  "fields": [
+    {"name": "notice_type", "type": "string", "required": true, "description": "Type of legal notice", "patterns": ["\\b(cease\\s+and\\s+desist|demand\\s+letter|summons|subpoena|termination\\s+notice)\\b"]},
+    {"name": "issuing_party", "type": "string", "required": false, "description": "Party issuing notice", "patterns": ["(?:from|issuing\\s+party)\\s*[:#\\-]?\\s*([^\\n]{3,100})"]},
+    {"name": "receiving_party", "type": "string", "required": false, "description": "Recipient", "patterns": ["(?:to|receiving\\s+party)\\s*[:#\\-]?\\s*([^\\n]{3,100})"]},
+    {"name": "issue_date", "type": "string", "required": false, "description": "Issue date", "patterns": ["(?:date|issued)\\s*[:#\\-]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "response_deadline", "type": "string", "required": false, "description": "Deadline to respond", "patterns": ["(?:response\\s+deadline|respond\\s+by)\\s*[:#\\-]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "jurisdiction", "type": "string", "required": false, "description": "Jurisdiction", "patterns": ["jurisdiction\\s*[:#\\-]?\\s*([^\\n]{3,80})"]},
+    {"name": "required_actions", "type": "list", "required": false, "all_matches": true, "description": "Required actions", "patterns": ["(?:must|required to|shall)\\s+([^.;\\n]{10,180})"]}
+  ]
+}

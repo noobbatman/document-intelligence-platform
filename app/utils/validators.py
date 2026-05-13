@@ -3,19 +3,28 @@
 Each validator returns a (normalized_value, is_valid, reason) tuple.
 Normalizers convert raw extracted strings into canonical typed values.
 """
+
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any
 
 # ── Date normalisation ────────────────────────────────────────────────────────
 
 _DATE_FORMATS = [
-    "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y-%m-%d",
-    "%d %B %Y", "%B %d, %Y", "%B %d %Y",
-    "%d %b %Y", "%b %d, %Y", "%b %d %Y",
-    "%d/%m/%y", "%m/%d/%y",
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%m/%d/%Y",
+    "%Y-%m-%d",
+    "%d %B %Y",
+    "%B %d, %Y",
+    "%B %d %Y",
+    "%d %b %Y",
+    "%b %d, %Y",
+    "%b %d %Y",
+    "%d/%m/%y",
+    "%m/%d/%y",
 ]
 
 
@@ -99,15 +108,18 @@ def validate_invoice_total_consistency(
     computed = subtotal + tax
     rel_err = abs(computed - total) / total
     if rel_err > tolerance:
-        return False, f"subtotal({subtotal}) + tax({tax}) = {computed:.2f} but total = {total:.2f} (error {rel_err:.1%})"
+        return (
+            False,
+            f"subtotal({subtotal}) + tax({tax}) = {computed:.2f} but total = {total:.2f} (error {rel_err:.1%})",
+        )
     return True, "ok"
 
 
 # ── Bank statement validators ──────────────────────────────────────────────────
 
 _ACCOUNT_RE = re.compile(r"^[\d\-\*X ]{4,30}$")
-_IBAN_RE     = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$")
-_SORT_CODE_RE= re.compile(r"^\d{2}-\d{2}-\d{2}$")
+_IBAN_RE = re.compile(r"^[A-Z]{2}\d{2}[A-Z0-9]{4,30}$")
+_SORT_CODE_RE = re.compile(r"^\d{2}-\d{2}-\d{2}$")
 
 
 def validate_account_number(raw: Any) -> tuple[Any, bool, str]:
@@ -133,8 +145,11 @@ def validate_statement_period(raw: Any) -> tuple[Any, bool, str]:
 
 
 def validate_balance_consistency(
-    opening: float | None, closing: float | None, available: float | None,
-    net_transactions: float | None = None, tolerance: float = 0.02
+    opening: float | None,
+    closing: float | None,
+    available: float | None,
+    net_transactions: float | None = None,
+    tolerance: float = 0.02,
 ) -> tuple[bool, str]:
     """Checks balance coherence.
 
@@ -155,12 +170,15 @@ def validate_balance_consistency(
             err = abs(computed - closing) / abs(closing)
             if err > tolerance:
                 ok = False
-                msgs.append(f"opening({opening}) + net({net_transactions:.2f}) = {computed:.2f} vs closing({closing}): {err:.1%}")
+                msgs.append(
+                    f"opening({opening}) + net({net_transactions:.2f}) = {computed:.2f} vs closing({closing}): {err:.1%}"
+                )
 
     return ok, "; ".join(msgs) if msgs else "ok"
 
 
 # ── Per-document-type validation runner ───────────────────────────────────────
+
 
 def validate_invoice_fields(fields: dict[str, Any]) -> list[dict]:
     """Run all invoice validators. Returns list of {field, valid, reason, normalized_value}."""
@@ -169,26 +187,47 @@ def validate_invoice_fields(fields: dict[str, Any]) -> list[dict]:
     def check(field, fn, *args, **kwargs):
         raw = fields.get(field)
         norm, valid, reason = fn(raw, *args, **kwargs) if not args else fn(raw)
-        results.append({"field": field, "raw_value": raw, "normalized_value": norm,
-                         "valid": valid, "reason": reason})
+        results.append(
+            {
+                "field": field,
+                "raw_value": raw,
+                "normalized_value": norm,
+                "valid": valid,
+                "reason": reason,
+            }
+        )
 
     check("invoice_number", validate_invoice_number)
-    check("invoice_date",   validate_date)
-    check("due_date",       validate_date)
+    check("invoice_date", validate_date)
+    check("due_date", validate_date)
 
     for f in ("subtotal", "tax", "total_amount"):
         raw = fields.get(f)
         norm, valid, reason = validate_amount(raw, field_name=f)
-        results.append({"field": f, "raw_value": raw, "normalized_value": norm,
-                        "valid": valid, "reason": reason})
+        results.append(
+            {
+                "field": f,
+                "raw_value": raw,
+                "normalized_value": norm,
+                "valid": valid,
+                "reason": reason,
+            }
+        )
 
     # Cross-field total consistency
     sub = parse_amount(fields.get("subtotal"))
     tax = parse_amount(fields.get("tax"))
     tot = parse_amount(fields.get("total_amount"))
     ok, reason = validate_invoice_total_consistency(sub, tax, tot)
-    results.append({"field": "_cross_total", "raw_value": None,
-                    "normalized_value": None, "valid": ok, "reason": reason})
+    results.append(
+        {
+            "field": "_cross_total",
+            "raw_value": None,
+            "normalized_value": None,
+            "valid": ok,
+            "reason": reason,
+        }
+    )
 
     return results
 
@@ -199,25 +238,46 @@ def validate_bank_statement_fields(fields: dict[str, Any]) -> list[dict]:
     def check(field, fn):
         raw = fields.get(field)
         norm, valid, reason = fn(raw)
-        results.append({"field": field, "raw_value": raw, "normalized_value": norm,
-                         "valid": valid, "reason": reason})
+        results.append(
+            {
+                "field": field,
+                "raw_value": raw,
+                "normalized_value": norm,
+                "valid": valid,
+                "reason": reason,
+            }
+        )
 
-    check("account_number",   validate_account_number)
+    check("account_number", validate_account_number)
     check("statement_period", validate_statement_period)
 
     for f in ("opening_balance", "closing_balance", "available_balance"):
         raw = fields.get(f)
         norm, valid, reason = validate_amount(raw, field_name=f)
-        results.append({"field": f, "raw_value": raw, "normalized_value": norm,
-                        "valid": valid, "reason": reason})
+        results.append(
+            {
+                "field": f,
+                "raw_value": raw,
+                "normalized_value": norm,
+                "valid": valid,
+                "reason": reason,
+            }
+        )
 
     # Balance coherence
-    op  = parse_amount(fields.get("opening_balance"))
-    cl  = parse_amount(fields.get("closing_balance"))
-    av  = parse_amount(fields.get("available_balance"))
+    op = parse_amount(fields.get("opening_balance"))
+    cl = parse_amount(fields.get("closing_balance"))
+    av = parse_amount(fields.get("available_balance"))
     ok, reason = validate_balance_consistency(op, cl, av)
-    results.append({"field": "_cross_balance", "raw_value": None,
-                    "normalized_value": None, "valid": ok, "reason": reason})
+    results.append(
+        {
+            "field": "_cross_balance",
+            "raw_value": None,
+            "normalized_value": None,
+            "valid": ok,
+            "reason": reason,
+        }
+    )
 
     return results
 
