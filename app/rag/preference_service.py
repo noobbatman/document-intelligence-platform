@@ -1,4 +1,5 @@
 """Learn reusable drafting preferences from operator edits."""
+
 from __future__ import annotations
 
 from sqlalchemy import desc, select

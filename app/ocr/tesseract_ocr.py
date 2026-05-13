@@ -39,13 +39,17 @@ class TesseractOCRProvider(OCRProvider):
                     float(data["left"][idx] + data["width"][idx]),
                     float(data["top"][idx] + data["height"][idx]),
                 ]
-                words.append(OCRWord(text=token, confidence=conf, page_number=page_index, bbox=bbox))
+                words.append(
+                    OCRWord(text=token, confidence=conf, page_number=page_index, bbox=bbox)
+                )
                 text_lines.append(token)
                 all_confidences.append(conf)
             page_text = " ".join(text_lines)
             all_text.append(page_text)
             page_conf = sum(word.confidence for word in words) / len(words) if words else 0.0
-            pages.append(OCRPage(page_number=page_index, text=page_text, words=words, confidence=page_conf))
+            pages.append(
+                OCRPage(page_number=page_index, text=page_text, words=words, confidence=page_conf)
+            )
         avg_conf = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
         return OCRResult(
             text="\f".join(all_text),

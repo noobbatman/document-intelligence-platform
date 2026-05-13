@@ -1,4 +1,5 @@
 """Federal/state civil complaint extractor."""
+
 from __future__ import annotations
 
 import re
@@ -42,7 +43,14 @@ class LegalComplaintExtractor(Extractor):
             tables=[],
             metadata={
                 "field_snippets": snippets,
-                "required_fields": ["case_caption", "case_number", "court", "plaintiffs", "defendants", "claims"],
+                "required_fields": [
+                    "case_caption",
+                    "case_number",
+                    "court",
+                    "plaintiffs",
+                    "defendants",
+                    "claims",
+                ],
             },
         )
 
@@ -67,7 +75,9 @@ def _caption_parties(text: str, role: str) -> list[str]:
         if role == "defendant":
             return _dedupe(
                 part.strip(" ,;.")
-                for part in re.split(r",\s+and\s+(?=[A-Z])|,\s+or,\s+in\s+the\s+alternative,\s+", value)
+                for part in re.split(
+                    r",\s+and\s+(?=[A-Z])|,\s+or,\s+in\s+the\s+alternative,\s+", value
+                )
                 if len(part.strip()) > 3
             )[:12]
         return [value]
@@ -88,7 +98,10 @@ def _case_number(text: str) -> str | None:
     return (
         regex_search(r"\bCase\s+(\d+:\d{2}-cv-\d{3,6}-[A-Z]+)\b", text)
         or regex_search(r"\b(\d{2}-[A-Z]-\d{3,6})\s+Case\s+No\.?\b", text)
-        or regex_search(r"(?:civil\s+action|case|docket)\s*(?:no\.?|number|#)\s*[:#]?\s*((?:\d+:\d{2}-cv-\d{3,6}-[A-Z]+)|(?:\d{2}-[A-Z]-\d{3,6})|[A-Z0-9:\-\/\.]+)", text)
+        or regex_search(
+            r"(?:civil\s+action|case|docket)\s*(?:no\.?|number|#)\s*[:#]?\s*((?:\d+:\d{2}-cv-\d{3,6}-[A-Z]+)|(?:\d{2}-[A-Z]-\d{3,6})|[A-Z0-9:\-\/\.]+)",
+            text,
+        )
     )
 
 
@@ -108,7 +121,9 @@ def _court(text: str) -> str | None:
         if district_match:
             district = district_match.group(1)
         return f"UNITED STATES DISTRICT COURT, {district.upper()}"
-    return regex_search(r"((?:UNITED\s+STATES\s+)?DISTRICT\s+COURT[^\\n]{0,120}|[A-Z][A-Za-z ,]+ Court)", text)
+    return regex_search(
+        r"((?:UNITED\s+STATES\s+)?DISTRICT\s+COURT[^\\n]{0,120}|[A-Z][A-Za-z ,]+ Court)", text
+    )
 
 
 def _claims(text: str) -> list[str]:
@@ -118,8 +133,14 @@ def _claims(text: str) -> list[str]:
     ]
     claims: list[str] = []
     for pattern in patterns:
-        claims.extend(re.sub(r"\s+", " ", match).strip(" :-") for match in re.findall(pattern, text, re.IGNORECASE))
-    title = regex_search(r"COMPLAINT\s+FOR\s+(.+?)(?:DEMAND\s+FOR\s+JURY\s+TRIAL|JURY\s+TRIAL\s+DEMANDED|PRELIMINARY\s+STATEMENT)", text)
+        claims.extend(
+            re.sub(r"\s+", " ", match).strip(" :-")
+            for match in re.findall(pattern, text, re.IGNORECASE)
+        )
+    title = regex_search(
+        r"COMPLAINT\s+FOR\s+(.+?)(?:DEMAND\s+FOR\s+JURY\s+TRIAL|JURY\s+TRIAL\s+DEMANDED|PRELIMINARY\s+STATEMENT)",
+        text,
+    )
     if title:
         claims.extend(
             re.sub(r"^(?:and|or)\s+", "", item.strip(" ,.;"), flags=re.IGNORECASE)

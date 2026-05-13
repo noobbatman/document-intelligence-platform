@@ -1,4 +1,5 @@
 """Small config loader for YAML-compatible project config files."""
+
 from __future__ import annotations
 
 import json

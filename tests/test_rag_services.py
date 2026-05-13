@@ -325,4 +325,8 @@ def test_get_preferences_for_draft_enforces_sql_limit(db_session):
     )
 
     assert len(prefs) == 3
-    assert [pref.preference_text for pref in prefs] == ["Preference 7", "Preference 6", "Preference 5"]
+    assert [pref.preference_text for pref in prefs] == [
+        "Preference 7",
+        "Preference 6",
+        "Preference 5",
+    ]

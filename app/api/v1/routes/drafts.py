@@ -1,4 +1,5 @@
 """Draft generation, evidence, edit capture, and learned preferences."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Response, status
@@ -47,7 +48,9 @@ def list_drafts(
     db: Session = DB_DEP,
     tenant_id: str | None = TENANT_DEP,
 ) -> list[DraftRead]:
-    return [DraftRead.model_validate(d) for d in DraftService(db).list_drafts(document_id, tenant_id)]
+    return [
+        DraftRead.model_validate(d) for d in DraftService(db).list_drafts(document_id, tenant_id)
+    ]
 
 
 @router.get("/documents/{document_id}/drafts/{draft_id}", response_model=DraftRead)
@@ -80,7 +83,9 @@ def update_draft(
     return DraftRead.model_validate(draft)
 
 
-@router.get("/documents/{document_id}/drafts/{draft_id}/evidence", response_model=list[DraftEvidenceChunk])
+@router.get(
+    "/documents/{document_id}/drafts/{draft_id}/evidence", response_model=list[DraftEvidenceChunk]
+)
 def get_draft_evidence(
     document_id: str,
     draft_id: str,

@@ -1,4 +1,5 @@
 """Case brief / court decision extractor."""
+
 from __future__ import annotations
 
 import re
@@ -14,16 +15,23 @@ class CaseBriefExtractor(Extractor):
     def extract(self, ocr_result: OCRResult) -> ExtractionOutput:
         text = ocr_result.text
         fields: dict[str, Any] = {
-            "case_name": regex_search(r"(?:case name|caption)\s*[:#]?\s*([A-Z][A-Za-z0-9 &,\.\-]+ v\.? [A-Z][A-Za-z0-9 &,\.\-]+)", text)
+            "case_name": regex_search(
+                r"(?:case name|caption)\s*[:#]?\s*([A-Z][A-Za-z0-9 &,\.\-]+ v\.? [A-Z][A-Za-z0-9 &,\.\-]+)",
+                text,
+            )
             or regex_search(r"\b([A-Z][A-Za-z0-9 &,\.\-]+ v\.? [A-Z][A-Za-z0-9 &,\.\-]+)\b", text),
-            "case_number": regex_search(r"(?:case|docket)\s*(?:no\.?|number|#)\s*[:#]?\s*([A-Z0-9\-\/:]+)", text),
+            "case_number": regex_search(
+                r"(?:case|docket)\s*(?:no\.?|number|#)\s*[:#]?\s*([A-Z0-9\-\/:]+)", text
+            ),
             "court": regex_search(r"(?:court)\s*[:#]?\s*([A-Z][A-Za-z ,\.\-]+)", text),
             "jurisdiction": regex_search(r"jurisdiction\s*[:#]?\s*([A-Za-z ,]+)", text),
             "filing_date": regex_search(r"filing\s+date\s*[:#]?\s*([A-Za-z0-9,\-/ ]+)", text),
             "decision_date": regex_search(r"decision\s+date\s*[:#]?\s*([A-Za-z0-9,\-/ ]+)", text),
             "plaintiff": regex_search(r"plaintiff\s*[:#]?\s*([A-Z][A-Za-z0-9 &,\.\-]+)", text),
             "defendant": regex_search(r"defendant\s*[:#]?\s*([A-Z][A-Za-z0-9 &,\.\-]+)", text),
-            "legal_issues": _list_after_heading(text, ["legal issues", "issues presented", "questions presented"]),
+            "legal_issues": _list_after_heading(
+                text, ["legal issues", "issues presented", "questions presented"]
+            ),
             "holding": regex_search(r"holding\s*[:#]?\s*([^\\n]{10,500})", text),
             "cited_statutes": _cited_statutes(text),
         }
@@ -45,7 +53,10 @@ class CaseBriefExtractor(Extractor):
 
 def _list_after_heading(text: str, headings: list[str]) -> list[str]:
     for heading in headings:
-        pattern = re.compile(rf"{re.escape(heading)}\s*[:#]?\s*(.*?)(?:\n\s*\n|holding|facts|analysis|$)", re.IGNORECASE | re.DOTALL)
+        pattern = re.compile(
+            rf"{re.escape(heading)}\s*[:#]?\s*(.*?)(?:\n\s*\n|holding|facts|analysis|$)",
+            re.IGNORECASE | re.DOTALL,
+        )
         match = pattern.search(text)
         if match:
             raw = match.group(1)

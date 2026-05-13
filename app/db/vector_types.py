@@ -3,6 +3,7 @@
 PostgreSQL uses pgvector/ARRAY types in production. SQLite stores the same
 values as JSON so the existing lightweight test harness can create the schema.
 """
+
 from __future__ import annotations
 
 from typing import Any

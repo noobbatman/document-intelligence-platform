@@ -1,4 +1,5 @@
 """Standard retrieval queries by draft type."""
+
 from __future__ import annotations
 
 DRAFT_QUERIES: dict[str, list[str]] = {

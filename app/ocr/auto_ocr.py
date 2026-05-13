@@ -1,4 +1,5 @@
 """Auto-routing OCR: reruns low-confidence documents with TrOCR."""
+
 from __future__ import annotations
 
 import logging

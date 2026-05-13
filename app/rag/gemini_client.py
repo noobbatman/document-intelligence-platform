@@ -1,4 +1,5 @@
 """Gemini 2.5 Flash client wrapper for structured drafting tasks."""
+
 from __future__ import annotations
 
 import json

@@ -1,4 +1,5 @@
 """TrOCR provider for handwritten and degraded text."""
+
 from __future__ import annotations
 
 import logging
@@ -60,7 +61,9 @@ class TrOCRProvider(OCRProvider):
             all_text.append(page_text)
             all_confidences.extend(word.confidence for word in words)
             page_conf = sum(word.confidence for word in words) / len(words) if words else 0.0
-            pages.append(OCRPage(page_number=page_number, text=page_text, words=words, confidence=page_conf))
+            pages.append(
+                OCRPage(page_number=page_number, text=page_text, words=words, confidence=page_conf)
+            )
 
         avg_conf = sum(all_confidences) / len(all_confidences) if all_confidences else 0.0
         return OCRResult(

@@ -11,6 +11,7 @@ Changes from v0.3.0:
       normalization changes
   3. Better confidence calibration on tie-break
 """
+
 from __future__ import annotations
 
 import math
@@ -27,15 +28,15 @@ from app.utils.config_loader import load_config
 _CONFIG_PATH = Path(__file__).with_name("document_types.yaml")
 _DOCUMENT_TYPES: dict[str, dict[str, Any]] = load_config(str(_CONFIG_PATH))
 _KEYWORDS: dict[str, list[str]] = {
-    label: list(config.get("keywords", []))
-    for label, config in _DOCUMENT_TYPES.items()
+    label: list(config.get("keywords", [])) for label, config in _DOCUMENT_TYPES.items()
 }
 _PATTERNS: dict[str, list[str]] = {
-    label: list(config.get("patterns", []))
-    for label, config in _DOCUMENT_TYPES.items()
+    label: list(config.get("patterns", [])) for label, config in _DOCUMENT_TYPES.items()
 }
 
-_IDF: dict[str, float] = {kw: math.log(len(_KEYWORDS) / 1) for kws in _KEYWORDS.values() for kw in kws}
+_IDF: dict[str, float] = {
+    kw: math.log(len(_KEYWORDS) / 1) for kws in _KEYWORDS.values() for kw in kws
+}
 
 # Minimum similarity threshold for fuzzy keyword matching (0-100)
 _FUZZY_THRESHOLD = 85
@@ -56,6 +57,7 @@ class HybridDocumentClassifier(DocumentClassifier):
         if use_fuzzy:
             try:
                 from rapidfuzz import fuzz  # noqa: F401
+
                 self._fuzzy_available = True
             except ImportError:
                 pass
@@ -65,7 +67,7 @@ class HybridDocumentClassifier(DocumentClassifier):
 
         keyword_scores = self._keyword_score(lowered)
         pattern_scores = self._pattern_score(lowered)
-        fuzzy_scores   = self._fuzzy_score(lowered) if self._fuzzy_available else {}
+        fuzzy_scores = self._fuzzy_score(lowered) if self._fuzzy_available else {}
 
         all_labels = set(keyword_scores) | set(pattern_scores) | set(fuzzy_scores)
         if not all_labels:
@@ -80,18 +82,20 @@ class HybridDocumentClassifier(DocumentClassifier):
             )
 
         best_label = max(combined, key=combined.__getitem__)
-        raw_score  = combined[best_label]
-        total      = sum(combined.values()) or 1.0
+        raw_score = combined[best_label]
+        total = sum(combined.values()) or 1.0
         dominance = raw_score / total
 
         if self._strong_legal_complaint_signal(lowered, keyword_scores, pattern_scores):
             return ClassificationResult(
                 label="legal_complaint",
-                confidence=round(min(0.95, max(0.72, combined.get("legal_complaint", 0.0) / total + 0.45)), 4),
+                confidence=round(
+                    min(0.95, max(0.72, combined.get("legal_complaint", 0.0) / total + 0.45)), 4
+                ),
                 rationale={
                     "keyword_scores": keyword_scores,
                     "pattern_scores": pattern_scores,
-                    "fuzzy_scores":   fuzzy_scores,
+                    "fuzzy_scores": fuzzy_scores,
                     "combined_scores": combined,
                     "override": "strong_legal_complaint_signal",
                 },
@@ -104,7 +108,7 @@ class HybridDocumentClassifier(DocumentClassifier):
                 rationale={
                     "keyword_scores": keyword_scores,
                     "pattern_scores": pattern_scores,
-                    "fuzzy_scores":   fuzzy_scores,
+                    "fuzzy_scores": fuzzy_scores,
                     "combined_scores": combined,
                 },
             )
@@ -117,7 +121,7 @@ class HybridDocumentClassifier(DocumentClassifier):
             rationale={
                 "keyword_scores": keyword_scores,
                 "pattern_scores": pattern_scores,
-                "fuzzy_scores":   fuzzy_scores,
+                "fuzzy_scores": fuzzy_scores,
                 "combined_scores": combined,
             },
         )
@@ -193,5 +197,9 @@ class HybridDocumentClassifier(DocumentClassifier):
                 or re.search(r"\bjury\s+trial\s+demand(?:ed)?\b", text)
             )
         )
-        legal_complaint_score = keyword_scores.get("legal_complaint", 0.0) + pattern_scores.get("legal_complaint", 0.0)
-        return court_caption and adversarial_caption and complaint_body and legal_complaint_score > 0.5
+        legal_complaint_score = keyword_scores.get("legal_complaint", 0.0) + pattern_scores.get(
+            "legal_complaint", 0.0
+        )
+        return (
+            court_caption and adversarial_caption and complaint_body and legal_complaint_score > 0.5
+        )

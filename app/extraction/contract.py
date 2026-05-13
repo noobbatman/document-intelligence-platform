@@ -1,4 +1,5 @@
 """Contract / agreement extractor."""
+
 import re
 from typing import Any
 
@@ -21,14 +22,16 @@ class ContractExtractor(Extractor):
             text,
         )
         # Standard executive agreement preamble: (the "Company"), and Kristin Scott (the "Executive").
-        party_b = regex_search(
-            r'["”]\s*\)\s*,?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(',
-            text,
-        ) or regex_search(
-            r"(?:corporation|company|llc|inc|ltd)[^,\n]{0,30},?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*[,\(]",
-            text,
-        ) or regex_search(
-            r"(?:party\s+b|second\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+)", text
+        party_b = (
+            regex_search(
+                r'["”]\s*\)\s*,?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*\(',
+                text,
+            )
+            or regex_search(
+                r"(?:corporation|company|llc|inc|ltd)[^,\n]{0,30},?\s+and\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\s*[,\(]",
+                text,
+            )
+            or regex_search(r"(?:party\s+b|second\s+party)\s*[:#]?\s*([A-Za-z0-9 &,\.\-]+)", text)
         )
         # "governed by … laws of the State of Ohio" — span up to 120 chars after "governed by".
         governing_law = regex_search(
@@ -44,7 +47,8 @@ class ContractExtractor(Extractor):
             text,
         )
         contract_value = regex_search(
-            r"(?:contract\s+value|total\s+value|consideration)\s*[:#]?\s*([$€£]?\s?[\d,]+(?:\.\d{2})?)", text
+            r"(?:contract\s+value|total\s+value|consideration)\s*[:#]?\s*([$€£]?\s?[\d,]+(?:\.\d{2})?)",
+            text,
         )
         consideration = contract_value or regex_search(
             r"(good\s+and\s+valuable\s+consideration|consideration\s+of\s+[$€£]?\s?[\d,]+(?:\.\d{2})?)",
@@ -58,10 +62,16 @@ class ContractExtractor(Extractor):
         notice_period = regex_search(
             r"(\d{1,3})\s+days?\s+(?:prior\s+)?(?:written\s+)?notice", text
         )
-        confidentiality_snippet = find_snippet(text, "confidentiality") or find_snippet(text, "confidential")
-        ip_ownership = _clause_snippet(text, ["intellectual property", "ip ownership", "work product"])
+        confidentiality_snippet = find_snippet(text, "confidentiality") or find_snippet(
+            text, "confidential"
+        )
+        ip_ownership = _clause_snippet(
+            text, ["intellectual property", "ip ownership", "work product"]
+        )
         indemnification = _clause_snippet(text, ["indemnification", "indemnify", "hold harmless"])
-        dispute_resolution = _clause_snippet(text, ["arbitration", "mediation", "dispute resolution", "litigation"])
+        dispute_resolution = _clause_snippet(
+            text, ["arbitration", "mediation", "dispute resolution", "litigation"]
+        )
         signatures = _extract_signatures(text)
 
         fields: dict[str, Any] = {

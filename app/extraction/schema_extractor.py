@@ -1,4 +1,5 @@
 """Schema-driven extractor with regex pre-pass and optional Gemini fill-in."""
+
 from __future__ import annotations
 
 import json
@@ -37,7 +38,9 @@ class SchemaDrivenExtractor(Extractor):
         field_names = [field.get("name") for field in self.schema.get("fields", [])]
         fields = {name: fields.get(name) for name in field_names if name}
         snippets = {
-            name: find_snippet(text, _snippet_value(value)) if value not in (None, "", [], {}) else None
+            name: find_snippet(text, _snippet_value(value))
+            if value not in (None, "", [], {})
+            else None
             for name, value in fields.items()
         }
         return ExtractionOutput(
@@ -52,7 +55,9 @@ class SchemaDrivenExtractor(Extractor):
                     for field in self.schema.get("fields", [])
                     if field.get("required")
                 ],
-                "extraction_mode": "llm_open_ended" if self.document_type == "unknown" else "schema_regex_llm",
+                "extraction_mode": "llm_open_ended"
+                if self.document_type == "unknown"
+                else "schema_regex_llm",
                 "schema_path": str(SCHEMA_DIR / f"{self.document_type}.yaml"),
             },
         )
@@ -70,7 +75,10 @@ class SchemaDrivenExtractor(Extractor):
         field_type = field.get("type", "string")
         patterns = field.get("patterns", [])
         if field_type == "boolean":
-            return any(re.search(pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE) for pattern in patterns)
+            return any(
+                re.search(pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE)
+                for pattern in patterns
+            )
         matches: list[str] = []
         for pattern in patterns:
             for match in re.finditer(pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE):
@@ -86,7 +94,9 @@ class SchemaDrivenExtractor(Extractor):
             return _to_number(matches[0])
         return matches[0] if matches else None
 
-    def _llm_fill(self, text: str, current_fields: dict[str, Any], missing: list[dict[str, Any]]) -> dict[str, Any]:
+    def _llm_fill(
+        self, text: str, current_fields: dict[str, Any], missing: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         try:
             payload = GeminiClient().generate_json(
                 system_prompt=(
@@ -98,7 +108,7 @@ class SchemaDrivenExtractor(Extractor):
                     f"FIELDS TO FILL: {json.dumps(missing, default=str)}\n"
                     f"CURRENT FIELDS: {json.dumps(current_fields, default=str)}\n\n"
                     f"DOCUMENT TEXT:\n{text[:24000]}\n\n"
-                    "Return JSON as {\"fields\": {\"field_name\": value}}."
+                    'Return JSON as {"fields": {"field_name": value}}.'
                 ),
             )
         except Exception as exc:
@@ -130,10 +140,20 @@ def _clean_value(value: str, field_name: str | None = None) -> str:
     cleaned = re.split(r"\n\s*\n", str(value), maxsplit=1)[0]
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:")
     if field_name == "plaintiffs":
-        cleaned = re.sub(r"^.*?\b(?:Civil\s+Action\s+No\.?|Case\s+No\.?|Case)\s+[A-Z0-9:\-\/.]+\s+", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(
+            r"^.*?\b(?:Civil\s+Action\s+No\.?|Case\s+No\.?|Case)\s+[A-Z0-9:\-\/.]+\s+",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
         cleaned = re.sub(r"^.*?\bDISTRICT\s+COURT\b\s*", "", cleaned, flags=re.IGNORECASE)
     if field_name == "defendants":
-        cleaned = re.split(r"\bCOMPLAINT\b|\bCOUNT\s+(?:I|II|III|IV|V|\d+)\b", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+        cleaned = re.split(
+            r"\bCOMPLAINT\b|\bCOUNT\s+(?:I|II|III|IV|V|\d+)\b",
+            cleaned,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0]
         cleaned = cleaned.strip(" ,.;:")
     return cleaned
 

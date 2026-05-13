@@ -1,4 +1,5 @@
 """Celery tasks: document processing, webhook dispatch, batch processing, email ingestion."""
+
 from __future__ import annotations
 
 import hashlib
@@ -135,7 +136,9 @@ def dispatch_webhook_task(self, webhook_id: str, event: str, payload: dict) -> d
         webhook.failure_count = 0
         db.commit()
         webhooks_dispatched_total.labels(event=event, success="true").inc()
-        logger.info("webhook_dispatched", extra={"webhook_id": webhook_id, "status": resp.status_code})
+        logger.info(
+            "webhook_dispatched", extra={"webhook_id": webhook_id, "status": resp.status_code}
+        )
         return {"status": resp.status_code}
 
     except Exception as exc:

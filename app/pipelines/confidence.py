@@ -1,4 +1,5 @@
 """Confidence scoring with OCR signal, field validation, and cross-field consistency."""
+
 from __future__ import annotations
 
 import re
@@ -120,6 +121,7 @@ _FIELD_VALIDATORS: dict[str, Any] = {
     "jury_demand": lambda v: 0.8 if isinstance(v, bool) else 0.0,
 }
 
+
 def _DEFAULT_VALIDATOR(value: Any) -> float:
     return 0.7 if value not in (None, "", []) else 0.0
 
@@ -199,13 +201,15 @@ class ConfidenceScorer:
             elif not is_empty and fmt_score < 0.5:
                 confidence = min(confidence, 0.49)
 
-            scored.append(FieldConfidence(
-                name=name,
-                value=value,
-                confidence=round(confidence, 4),
-                source_snippet=snippets.get(name),
-                requires_review=confidence < self.threshold,
-            ))
+            scored.append(
+                FieldConfidence(
+                    name=name,
+                    value=value,
+                    confidence=round(confidence, 4),
+                    source_snippet=snippets.get(name),
+                    requires_review=confidence < self.threshold,
+                )
+            )
 
         return scored
 
@@ -221,7 +225,8 @@ class ConfidenceScorer:
 
         mean_field = sum(f.confidence for f in field_confidences) / len(field_confidences)
         required_present = sum(
-            1 for f in field_confidences
+            1
+            for f in field_confidences
             if f.name in required_fields and f.value not in (None, "", [])
         )
         coverage = required_present / max(len(required_fields), 1)

@@ -1,4 +1,5 @@
 """Embedding wrapper with lazy sentence-transformers loading."""
+
 from __future__ import annotations
 
 import hashlib

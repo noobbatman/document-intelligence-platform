@@ -1,4 +1,5 @@
 """Draft generation and edit capture services."""
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,9 @@ class DraftService:
         self.gemini = GeminiClient()
         self.preferences = PreferenceService(db)
 
-    def create_placeholder(self, document_id: str, draft_type: str, tenant_id: str | None) -> DraftOutput:
+    def create_placeholder(
+        self, document_id: str, draft_type: str, tenant_id: str | None
+    ) -> DraftOutput:
         document = self._get_document(document_id, tenant_id=tenant_id)
         draft = DraftOutput(
             document_id=document.id,
@@ -46,14 +49,18 @@ class DraftService:
         self.db.refresh(draft)
         return draft
 
-    def generate(self, document_id: str, draft_type: str, tenant_id: str | None, draft_id: str | None = None) -> DraftOutput:
+    def generate(
+        self, document_id: str, draft_type: str, tenant_id: str | None, draft_id: str | None = None
+    ) -> DraftOutput:
         document = self._get_document(document_id, tenant_id=tenant_id)
         draft = self.db.get(DraftOutput, draft_id) if draft_id else None
         if draft is None:
             draft = self.create_placeholder(document.id, draft_type, tenant_id)
 
         try:
-            chunks = self._retrieve_for_draft(document.id, draft_type, document.document_type or "unknown")
+            chunks = self._retrieve_for_draft(
+                document.id, draft_type, document.document_type or "unknown"
+            )
             prefs = self.preferences.get_preferences_for_draft(
                 tenant_id=document.tenant_id,
                 document_type=document.document_type or "unknown",
@@ -178,7 +185,9 @@ class DraftService:
         self.db.refresh(draft)
         return draft, edits
 
-    def get_evidence(self, document_id: str, draft_id: str, tenant_id: str | None) -> list[DocumentChunk]:
+    def get_evidence(
+        self, document_id: str, draft_id: str, tenant_id: str | None
+    ) -> list[DocumentChunk]:
         draft = self.get_draft(document_id, draft_id, tenant_id)
         if not draft.evidence_chunk_ids:
             return []
@@ -201,7 +210,9 @@ class DraftService:
             raise HTTPException(status_code=404, detail="Document not found.")
         return document
 
-    def _retrieve_for_draft(self, document_id: str, draft_type: str, document_type: str = "unknown") -> list[RetrievedChunk]:
+    def _retrieve_for_draft(
+        self, document_id: str, draft_type: str, document_type: str = "unknown"
+    ) -> list[RetrievedChunk]:
         by_id: dict[str, RetrievedChunk] = {}
         template = load_draft_template(draft_type)
         section_queries = [
@@ -229,7 +240,9 @@ class DraftService:
             by_id.setdefault(chunk.chunk_id, chunk)
         return self._select_diverse_chunks(list(by_id.values()))
 
-    def _keyword_support_chunks(self, document_id: str, draft_type: str, document_type: str) -> list[RetrievedChunk]:
+    def _keyword_support_chunks(
+        self, document_id: str, draft_type: str, document_type: str
+    ) -> list[RetrievedChunk]:
         template = load_draft_template(draft_type) or {}
         override = template.get("document_type_overrides", {}).get(document_type, {})
         terms = [
@@ -238,7 +251,9 @@ class DraftService:
         ]
         if not terms:
             return []
-        limit_per_term = int(override.get("support_limit_per_term") or template.get("support_limit_per_term") or 3)
+        limit_per_term = int(
+            override.get("support_limit_per_term") or template.get("support_limit_per_term") or 3
+        )
         chunks: list[RetrievedChunk] = []
         seen: set[str] = set()
         for term in terms:
@@ -297,7 +312,9 @@ class DraftService:
                     break
         return selected
 
-    def _system_prompt(self, draft_type: str, prefs: list[Any], examples: list[tuple[str, str]]) -> str:
+    def _system_prompt(
+        self, draft_type: str, prefs: list[Any], examples: list[tuple[str, str]]
+    ) -> str:
         preference_block = ""
         if prefs:
             preference_block += "\nLEARNED PREFERENCES FROM PRIOR OPERATOR EDITS:\n"
@@ -339,7 +356,9 @@ Respond in JSON with this structure:
             )
             for idx, chunk in enumerate(chunks, 1)
         )
-        template_instructions = self._template_instructions(draft_type, document.document_type or "unknown")
+        template_instructions = self._template_instructions(
+            draft_type, document.document_type or "unknown"
+        )
         return (
             f"DOCUMENT TYPE: {document.document_type or 'unknown'}\n"
             f"DRAFT DATE: {self._draft_date()}\n"
@@ -361,7 +380,9 @@ Respond in JSON with this structure:
         lines = ["", "TEMPLATE DEFAULT RULES:"]
         for key, value in resolved.items():
             lines.append(f"- Use {key.upper()}: {value}.")
-        lines.append("- Treat template defaults as metadata, not document facts; do not mark them unsupported only because they are absent from the source.")
+        lines.append(
+            "- Treat template defaults as metadata, not document facts; do not mark them unsupported only because they are absent from the source."
+        )
         return "\n".join(lines)
 
     def _template_instructions(self, draft_type: str, document_type: str) -> str:
@@ -423,7 +444,9 @@ Respond in JSON with this structure:
         return ids
 
     def _word_count(self, content: dict[str, Any]) -> int:
-        return sum(len(str(section.get("content", "")).split()) for section in content.get("sections", []))
+        return sum(
+            len(str(section.get("content", "")).split()) for section in content.get("sections", [])
+        )
 
     def _draft_date(self) -> str:
         now = datetime.now(UTC)

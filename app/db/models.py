@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models — all timestamps are timezone-aware UTC."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -29,60 +30,60 @@ def _utcnow() -> datetime:
 
 
 class DocumentStatus(StrEnum):
-    uploaded        = "uploaded"
-    queued          = "queued"
-    processing      = "processing"
+    uploaded = "uploaded"
+    queued = "queued"
+    processing = "processing"
     review_required = "review_required"
-    completed       = "completed"
-    failed          = "failed"
+    completed = "completed"
+    failed = "failed"
 
 
 class ReviewStatus(StrEnum):
-    pending   = "pending"
+    pending = "pending"
     completed = "completed"
     dismissed = "dismissed"
 
 
 class AuditEventType(StrEnum):
-    document_uploaded           = "document_uploaded"
-    document_deleted            = "document_deleted"
-    processing_started          = "processing_started"
-    processing_completed        = "processing_completed"
-    processing_failed           = "processing_failed"
-    review_task_created         = "review_task_created"
-    review_decision_submitted   = "review_decision_submitted"
-    document_reprocessed        = "document_reprocessed"
-    webhook_dispatched          = "webhook_dispatched"
-    webhook_failed              = "webhook_failed"
-    correction_exported         = "correction_exported"
+    document_uploaded = "document_uploaded"
+    document_deleted = "document_deleted"
+    processing_started = "processing_started"
+    processing_completed = "processing_completed"
+    processing_failed = "processing_failed"
+    review_task_created = "review_task_created"
+    review_decision_submitted = "review_decision_submitted"
+    document_reprocessed = "document_reprocessed"
+    webhook_dispatched = "webhook_dispatched"
+    webhook_failed = "webhook_failed"
+    correction_exported = "correction_exported"
 
 
 class WebhookEvent(StrEnum):
     processing_completed = "processing_completed"
-    processing_failed    = "processing_failed"
-    review_required      = "review_required"
+    processing_failed = "processing_failed"
+    review_required = "review_required"
 
 
 class WebhookStatus(StrEnum):
-    active   = "active"
+    active = "active"
     inactive = "inactive"
 
 
 class DraftType(StrEnum):
-    internal_memo       = "internal_memo"
-    case_fact_summary   = "case_fact_summary"
-    contract_summary    = "contract_summary"
-    notice_summary      = "notice_summary"
-    document_checklist  = "document_checklist"
-    affidavit_summary   = "affidavit_summary"
+    internal_memo = "internal_memo"
+    case_fact_summary = "case_fact_summary"
+    contract_summary = "contract_summary"
+    notice_summary = "notice_summary"
+    document_checklist = "document_checklist"
+    affidavit_summary = "affidavit_summary"
 
 
 class DraftStatus(StrEnum):
     generating = "generating"
-    draft      = "draft"
-    reviewed   = "reviewed"
-    approved   = "approved"
-    failed     = "failed"
+    draft = "draft"
+    reviewed = "reviewed"
+    approved = "approved"
+    failed = "failed"
 
 
 class Document(Base):
@@ -109,7 +110,9 @@ class Document(Base):
     tags: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
     extraction_result: Mapped[ExtractionResult | None] = relationship(
         back_populates="document", uselist=False, cascade="all, delete-orphan"
@@ -141,7 +144,9 @@ class ExtractionResult(Base):
     extraction_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     validation_results: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
     document: Mapped[Document] = relationship(back_populates="extraction_result")
 
@@ -162,7 +167,9 @@ class ReviewTask(Base):
     bbox: Mapped[list | None] = mapped_column(JSON, nullable=True)
     validation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
     document: Mapped[Document] = relationship(back_populates="review_tasks")
     decisions: Mapped[list[ReviewDecision]] = relationship(
@@ -213,7 +220,9 @@ class Webhook(Base):
     secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(40), default=WebhookStatus.active)
     failure_count: Mapped[int] = mapped_column(Integer, default=0)
-    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -269,7 +278,9 @@ class PurchaseOrder(Base):
     status: Mapped[str] = mapped_column(String(40), default="open")
     tenant_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
 
 class POMatch(Base):
@@ -326,7 +337,9 @@ class DraftOutput(Base):
     model_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     preferences_applied: Mapped[list[str]] = mapped_column(TextList, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
     document: Mapped[Document] = relationship(back_populates="draft_outputs")
     edits: Mapped[list[DraftEdit]] = relationship(

@@ -1,4 +1,5 @@
 """Semantic retrieval over document chunks."""
+
 from __future__ import annotations
 
 import math

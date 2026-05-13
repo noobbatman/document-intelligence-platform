@@ -25,9 +25,9 @@ celery_app.conf.update(
     # Queues (priority routing)
     task_default_queue="documents.normal",
     task_queues={
-        "documents.high":   {"exchange": "documents", "routing_key": "high"},
+        "documents.high": {"exchange": "documents", "routing_key": "high"},
         "documents.normal": {"exchange": "documents", "routing_key": "normal"},
-        "webhooks":         {"exchange": "webhooks",  "routing_key": "webhooks"},
+        "webhooks": {"exchange": "webhooks", "routing_key": "webhooks"},
     },
     task_routes={
         "app.workers.tasks.process_document_task": {"queue": "documents.normal"},

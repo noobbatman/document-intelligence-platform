@@ -1,5 +1,6 @@
 """Image preprocessing pipeline to improve OCR quality on scanned, low-resolution,
 and inconsistently formatted documents."""
+
 from __future__ import annotations
 
 import logging
@@ -50,7 +51,8 @@ def preprocess_for_ocr(
     if binarize:
         # Adaptive threshold handles uneven lighting across the page.
         gray = cv2.adaptiveThreshold(
-            gray, 255,
+            gray,
+            255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
             blockSize=15,
@@ -65,6 +67,7 @@ def _deskew(gray: np.ndarray) -> np.ndarray:
     dark (text) pixels. Skips correction when tilt is below 0.5°."""
     try:
         import cv2
+
         coords = np.column_stack(np.where(gray < 128))
         if len(coords) < 50:
             return gray
@@ -79,7 +82,9 @@ def _deskew(gray: np.ndarray) -> np.ndarray:
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, 1.0)
         return cv2.warpAffine(
-            gray, M, (w, h),
+            gray,
+            M,
+            (w, h),
             flags=cv2.INTER_CUBIC,
             borderMode=cv2.BORDER_REPLICATE,
         )
@@ -93,6 +98,7 @@ def _pillow_preprocess(image: Image.Image, *, enhance_contrast: bool) -> Image.I
     image = image.convert("L")
     if enhance_contrast:
         from PIL import ImageOps
+
         image = ImageOps.autocontrast(image, cutoff=1)
     image = image.filter(ImageFilter.SHARPEN)
     return image.convert("RGB")

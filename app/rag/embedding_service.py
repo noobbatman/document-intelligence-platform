@@ -1,4 +1,5 @@
 """Chunk, embed, and store document text."""
+
 from __future__ import annotations
 
 from sqlalchemy import delete
@@ -44,4 +45,3 @@ class EmbeddingService:
     def delete_embeddings(self, document_id: str, session: Session) -> None:
         session.execute(delete(ChunkModel).where(ChunkModel.document_id == document_id))
         session.commit()
-

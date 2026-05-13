@@ -1,4 +1,5 @@
 """Section-aware chunking for legal documents."""
+
 from __future__ import annotations
 
 import re
