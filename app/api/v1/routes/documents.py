@@ -37,6 +37,10 @@ from app.workers.tasks import process_document_high_priority, process_document_t
 
 # router-level auth: all endpoints require a valid API key (no-op when API_KEYS is empty)
 router = APIRouter(dependencies=[Depends(require_api_key)])
+DB_DEP = Depends(db_dependency)
+TENANT_DEP = Depends(get_optional_tenant)
+UPLOAD_FILE = File(...)
+BATCH_UPLOAD_FILES = File(...)
 
 
 # ── Upload ────────────────────────────────────────────────────────────────────
@@ -45,10 +49,10 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 @router.post("/upload", response_model=DocumentUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_document(
     request: Request,
-    file: UploadFile = File(...),
+    file: UploadFile = UPLOAD_FILE,
     priority: bool = Query(default=False, description="Route to high-priority queue"),
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> DocumentUploadResponse:
     service = DocumentService(db)
     document = await service.create_document(file, tenant_id=tenant_id)
@@ -65,10 +69,10 @@ async def upload_document(
 )
 async def upload_documents_batch(
     request: Request,
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = BATCH_UPLOAD_FILES,
     priority: bool = Query(default=False),
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> BatchUploadResponse:
     service = DocumentService(db)
     task_fn = process_document_high_priority if priority else process_document_task
@@ -94,8 +98,8 @@ def list_documents(
     document_type: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> DocumentListResponse:
     service = DocumentService(db)
     items, total = service.list_documents(
@@ -117,8 +121,8 @@ def list_documents(
 def search_documents(
     q: str = Query(..., min_length=2, description="Keyword query (filename, type, or OCR text)"),
     limit: int = Query(default=20, ge=1, le=100),
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> list[DocumentRead]:
     service = DocumentService(db)
     return [
@@ -133,8 +137,8 @@ def search_documents(
 @router.get("/{document_id}/status")
 def get_document_status(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> dict:
     doc = DocumentService(db).get_document(document_id, tenant_id=tenant_id)
     return {
@@ -149,8 +153,8 @@ def get_document_status(
 @router.get("/{document_id}/result")
 def get_document_result(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> dict:
     doc = DocumentService(db).get_document(document_id, tenant_id=tenant_id)
     if not doc.extraction_result:
@@ -161,8 +165,8 @@ def get_document_result(
 @router.get("/{document_id}/history")
 def get_document_history(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> list[dict]:
     doc = DocumentService(db).get_document(document_id, tenant_id=tenant_id)
     return [
@@ -180,8 +184,8 @@ def get_document_history(
 @router.get("/{document_id}", response_model=DocumentDetail)
 def get_document(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> DocumentDetail:
     return DocumentService(db).get_detail(document_id, tenant_id=tenant_id)
 
@@ -195,8 +199,8 @@ def reprocess_document(
     request: Request,
     document_id: str,
     priority: bool = Query(default=False),
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> ReprocessResponse:
     service = DocumentService(db)
     doc = service.get_document(document_id, tenant_id=tenant_id)
@@ -232,8 +236,8 @@ def ask_document(
 @router.get("/{document_id}/export")
 def export_document(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ):
     settings = get_settings()
     service = DocumentService(db)
@@ -245,8 +249,8 @@ def export_document(
         provider = S3StorageProvider()
         try:
             data = provider.get_export_bytes(doc.id)
-        except Exception:
-            raise HTTPException(status_code=404, detail="Export file not found.")
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail="Export file not found.") from exc
         return StreamingResponse(
             iter([data]),
             media_type="application/json",
@@ -266,8 +270,8 @@ def export_document(
 )
 def delete_document(
     document_id: str,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
+    db: Session = DB_DEP,
+    tenant_id: str | None = TENANT_DEP,
 ) -> Response:
     service = DocumentService(db)
     service.soft_delete(document_id, tenant_id=tenant_id)

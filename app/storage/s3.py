@@ -73,10 +73,10 @@ class S3StorageProvider(StorageProvider):
         parts = stored_path.removeprefix("s3://").split("/", 1)
         bucket, key = parts[0], parts[1]
         suffix = Path(key).suffix
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-        self._client.download_fileobj(bucket, key, tmp)
-        tmp.flush()
-        return Path(tmp.name)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            self._client.download_fileobj(bucket, key, tmp)
+            tmp.flush()
+            return Path(tmp.name)
 
     def get_export_bytes(self, document_id: str) -> bytes:
         key = f"{document_id}.json"

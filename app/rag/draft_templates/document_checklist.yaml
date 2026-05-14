@@ -1,20 +1,6 @@
 {
   "draft_type": "document_checklist",
-  "applicable_document_types": ["contract", "legal_complaint", "legal_notice", "case_brief", "affidavit", "unknown"],
-  "document_type_overrides": {
-    "affidavit": {
-      "support_terms": ["signature", "notary", "subscribed", "sworn", "commission", "execution date"],
-      "instructions": ["Check for declarant signature, execution date, notary name, notary jurisdiction, and commission details."]
-    },
-    "case_brief": {
-      "support_terms": ["case number", "court", "holding", "decision date", "legal issue", "citation"],
-      "instructions": ["Check whether case name, court, docket, issue, holding, and cited authority are present."]
-    },
-    "legal_notice": {
-      "support_terms": ["deadline", "required actions", "issuing party", "receiving party", "legal basis"],
-      "instructions": ["Check whether sender, recipient, legal basis, required actions, and response deadline are present."]
-    }
-  },
+  "applicable_document_types": ["contract", "legal_complaint", "legal_notice", "unknown"],
   "defaults": {},
   "sections": [
     {"key": "required_items", "title": "Required Items", "required": true, "query": "required signatures execution dates exhibits attachments schedules deadlines", "instruction": "List required signatures, dates, exhibits, schedules, and deadlines."},

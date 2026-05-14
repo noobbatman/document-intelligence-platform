@@ -16,7 +16,7 @@ from app.rag.draft_service import DraftService
 from app.rag.embedder import Embedder
 from app.rag.embedding_service import EmbeddingService
 from app.rag.preference_service import PreferenceService
-from app.rag.retrieval_service import RetrievalService
+from app.rag.retrieval_service import RetrievalService, RetrievedChunk
 
 
 def test_section_chunker_preserves_legal_headers():
@@ -109,6 +109,19 @@ def test_chunker_ignores_common_legal_abbreviations_for_sentence_boundary():
     boundary = chunker._sentence_boundary(text, 0, target_after_inc, len(text))
 
     assert boundary > text.index("agreement.")
+
+
+def test_chunker_infers_page_numbers_from_court_page_markers():
+    text = (
+        "Barker v. Landmark Credit Union - Page 1 Case 2:26-cv-00815-PP Filed 05/08/26\n"
+        + ("Introductory allegations. " * 25)
+        + "\nBarker v. Landmark Credit Union - Page 23 Case 2:26-cv-00815-PP Filed 05/08/26\n"
+        + ("COUNT II Conspiracy Against Civil Rights. " * 25)
+    )
+
+    chunks = SectionAwareChunker(chunk_size_chars=250, chunk_overlap_chars=20).chunk(text)
+
+    assert any(chunk.page_number == 23 and "COUNT II" in chunk.text for chunk in chunks)
 
 
 def test_draft_edit_capture_updates_content(db_session):
@@ -330,3 +343,51 @@ def test_get_preferences_for_draft_enforces_sql_limit(db_session):
         "Preference 6",
         "Preference 5",
     ]
+
+
+def test_draft_prompt_injects_date_and_ocr_normalization_rule(db_session):
+    service = DraftService(db_session)
+    prompt = service._system_prompt("internal_memo", prefs=[], examples=[])
+
+    assert "Do not invent filing, review, or memo dates" in prompt
+    assert "Landmark Credit Union" in prompt
+    assert "TO: Senior Partner" in prompt
+    assert "FROM: Legal Document Analyst" in prompt
+
+
+def test_internal_memo_prompt_deepens_legal_complaint_claims(db_session):
+    service = DraftService(db_session)
+    doc = Document(
+        filename="complaint.pdf",
+        stored_path="complaint.pdf",
+        content_type="application/pdf",
+        status=DocumentStatus.completed,
+        document_type="legal_complaint",
+        pipeline_version="test",
+    )
+
+    prompt = service._user_prompt(doc, "internal_memo", {"claims": ["COUNT I RFPA"]}, [])
+
+    assert "enumerate each cause of action" in prompt
+    assert "statute or legal basis" in prompt
+
+
+def test_draft_chunk_selection_diversifies_long_documents(db_session):
+    service = DraftService(db_session)
+    candidates = [
+        RetrievedChunk(
+            chunk_id=f"chunk-{idx}",
+            document_id="doc-1",
+            chunk_index=idx * 10,
+            page_number=1,
+            section_header=None,
+            text=f"chunk {idx}",
+            similarity_score=1.0 - (idx * 0.01),
+        )
+        for idx in range(12)
+    ]
+
+    selected = service._select_diverse_chunks(candidates)
+
+    assert len(selected) == service.settings.draft_max_chunks
+    assert len({chunk.chunk_index // 20 for chunk in selected}) > 2

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -16,7 +15,6 @@ from app.utils.config_loader import load_config
 from app.utils.text import find_snippet
 
 SCHEMA_DIR = Path(__file__).with_name("schemas")
-logger = logging.getLogger(__name__)
 
 
 class SchemaDrivenExtractor(Extractor):
@@ -111,15 +109,7 @@ class SchemaDrivenExtractor(Extractor):
                     'Return JSON as {"fields": {"field_name": value}}.'
                 ),
             )
-        except Exception as exc:
-            logger.warning(
-                "schema_llm_fill_failed",
-                extra={
-                    "document_type": self.document_type,
-                    "missing_fields": [field.get("name") for field in missing],
-                    "error": str(exc),
-                },
-            )
+        except Exception:
             return {}
         fields = payload.get("fields", payload)
         return fields if isinstance(fields, dict) else {}

@@ -13,6 +13,7 @@ from app.core.config import get_settings
 
 router = APIRouter()
 settings = get_settings()
+DB_DEP = Depends(db_dependency)
 
 
 @router.get("/health")
@@ -23,7 +24,7 @@ def liveness() -> dict:
 
 
 @router.get("/health/ready")
-def readiness(db: Session = Depends(db_dependency)) -> dict:
+def readiness(db: Session = DB_DEP) -> dict:
     """Readiness probe — confirms database and Redis are reachable."""
     checks: dict[str, str] = {}
 

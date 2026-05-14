@@ -2,27 +2,6 @@
   "draft_type": "internal_memo",
   "applicable_document_types": ["legal_complaint", "contract", "legal_notice", "case_brief", "unknown"],
   "defaults": {"to": "Senior Partner", "from": "Legal Document Analyst", "date": "{{draft_date}}"},
-  "document_type_overrides": {
-    "legal_complaint": {
-      "support_limit_per_term": 3,
-      "support_terms": ["count ", "prayer for relief", "relief", "jurisdiction", "venue", "subpoena", "right to financial privacy", "RFPA", "conspiracy", "void"],
-      "instructions": [
-        "For the Claims Asserted section, enumerate each cause of action by count number or title, include the statute or legal basis cited in the source when present, and summarize the specific factual basis alleged for that count."
-      ]
-    },
-    "case_brief": {
-      "support_terms": ["holding", "legal issue", "procedural history", "court", "statute", "precedent"],
-      "instructions": ["Emphasize procedural posture, issues, holding, and cited authority."]
-    },
-    "legal_notice": {
-      "support_terms": ["notice", "response deadline", "required actions", "non-compliance", "issuing party", "receiving party"],
-      "instructions": ["Emphasize deadline, required recipient actions, legal basis, and consequences of non-compliance."]
-    },
-    "affidavit": {
-      "support_terms": ["affidavit", "declaration", "sworn", "notary", "under penalty of perjury", "statement"],
-      "instructions": ["Emphasize declarant identity, sworn statements, execution details, and notarization."]
-    }
-  },
   "sections": [
     {"key": "memo_header", "title": "MEMORANDUM", "required": true, "query": "case caption parties filing date subject", "instruction": "Use TO, FROM, DATE, and SUBJECT metadata. Do not mark TO/FROM unsupported."},
     {"key": "case_overview", "title": "I. Case Overview", "required": true, "query": "case caption plaintiffs defendants court case number claims filing date", "instruction": "Identify court, parties, case number, filing date, and document posture."},

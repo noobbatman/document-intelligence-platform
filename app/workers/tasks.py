@@ -1,4 +1,4 @@
-"""Celery tasks: document processing, webhook dispatch, batch processing, email ingestion."""
+"""Celery tasks: document processing, webhook dispatch, draft generation, and preference learning."""
 
 from __future__ import annotations
 
@@ -178,46 +178,6 @@ def dispatch_webhook_task(self, webhook_id: str, event: str, payload: dict) -> d
         raise
     finally:
         db.close()
-
-
-@celery_app.task(bind=True, name="app.workers.tasks.poll_email_task")
-def poll_email_task(self) -> dict:
-    from app.db.models import Document, DocumentStatus
-    from app.services.email_ingestion_service import EmailIngestionService
-
-    svc = EmailIngestionService()
-    if not svc.is_configured():
-        return {"skipped": True, "reason": "Email not configured"}
-
-    attachments = svc.poll()
-    if not attachments:
-        return {"enqueued": 0}
-
-    db = SessionLocal()
-    enqueued: list[dict] = []
-    try:
-        for att in attachments:
-            doc = Document(
-                filename=att["original_filename"],
-                stored_path=att["stored_path"],
-                content_type=att["content_type"],
-                status=DocumentStatus.queued,
-                pipeline_version=settings.pipeline_version,
-                tags={
-                    "source": "email",
-                    "sender": att.get("sender", ""),
-                    "subject": att.get("subject", ""),
-                },
-            )
-            db.add(doc)
-            db.flush()
-            task = process_document_task.delay(doc.id)
-            enqueued.append({"document_id": doc.id, "task_id": str(task.id)})
-        db.commit()
-    finally:
-        db.close()
-
-    return {"enqueued": len(enqueued), "documents": enqueued}
 
 
 @celery_app.task(

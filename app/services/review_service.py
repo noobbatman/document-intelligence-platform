@@ -1,4 +1,4 @@
-"""Review task service — list, decide, complete, record corrections."""
+"""Review task service — list, decide, and complete low-confidence review tasks."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ from app.db.models import (
 )
 from app.schemas.review import ReviewDecisionCreate
 from app.services.audit_service import AuditService
-from app.services.correction_service import CorrectionService
 from app.storage.factory import get_storage_provider
 from app.utils.text import deep_set
 
@@ -31,7 +30,6 @@ class ReviewService:
         self.db = db
         self.audit = AuditService(db)
         self.storage = get_storage_provider()
-        self.corrections = CorrectionService(db)
         self.settings = get_settings()
 
     # ── Read ──────────────────────────────────────────────────────────────────
@@ -151,17 +149,6 @@ class ReviewService:
             flag_modified(extraction, "normalized_payload")
             flag_modified(extraction, "raw_payload")
             self.storage.write_export(document.id, export_payload)
-
-        # Record for active learning (only if value actually changed)
-        if str(corrected_val) != str(original_val):
-            self.corrections.record(
-                document=document,
-                field_name=task.field_name,
-                original_value=original_val,
-                corrected_value=corrected_val,
-                ocr_snippet=task.source_snippet,
-                reviewer_name=payload.reviewer_name,
-            )
 
         # Auto-complete document when all tasks are resolved
         pending_count = sum(

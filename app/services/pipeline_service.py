@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from time import perf_counter
 
 from sqlalchemy.orm import Session
@@ -142,18 +143,6 @@ class PipelineService:
                     "correlation_id": correlation_id,
                 },
             )
-            if document.status == DocumentStatus.completed:
-                try:
-                    from app.core.config import get_settings
-                    from app.workers.tasks import generate_embeddings_task
-
-                    if get_settings().rag_enabled:
-                        generate_embeddings_task.delay(document.id, tenant_id=document.tenant_id)
-                except Exception as embed_exc:
-                    logger.warning(
-                        "embedding_task_enqueue_failed",
-                        extra={"document_id": document.id, "error": str(embed_exc)},
-                    )
 
             try:
                 from app.workers.tasks import embed_document_task
@@ -210,7 +199,5 @@ class PipelineService:
         if stored_path.startswith("s3://"):
             import os
 
-            try:
+            with suppress(OSError):
                 os.unlink(path)
-            except OSError:
-                pass

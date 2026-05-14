@@ -1,6 +1,6 @@
 {
   "draft_type": "document_summary",
-  "applicable_document_types": ["unknown", "invoice", "bank_statement", "receipt", "contract", "legal_notice", "legal_complaint", "case_brief", "affidavit"],
+  "applicable_document_types": ["unknown", "contract", "legal_notice", "legal_complaint", "case_brief", "affidavit"],
   "defaults": {},
   "sections": [
     {"key": "overview", "title": "Overview", "required": true, "query": "document purpose parties dates obligations facts", "instruction": "Identify the apparent document type, purpose, parties, and key dates."},

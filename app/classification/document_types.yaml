@@ -1,19 +1,4 @@
 {
-  "invoice": {
-    "description": "Commercial invoice or bill",
-    "keywords": ["invoice", "bill to", "invoice number", "amount due", "tax", "subtotal", "due date", "purchase order", "remit to", "net 30", "payment terms", "line item", "qty", "unit price", "total due", "vat", "billed to", "invoice date"],
-    "patterns": ["\\binvoice\\s*(?:no\\.?|number|#)\\s*[:\\-]?\\s*[A-Z0-9\\-\\/]+", "\\bamount\\s+due\\b", "\\btotal\\s+due\\b", "\\bvat\\s*\\(\\d+%\\)"]
-  },
-  "bank_statement": {
-    "description": "Bank or credit-card statement",
-    "keywords": ["statement period", "account number", "opening balance", "closing balance", "debits", "credits", "available balance", "transaction date", "reference number", "sort code", "iban", "monthly statement", "statement date"],
-    "patterns": ["\\bstatement\\s+(?:period|date)\\b", "\\b(?:opening|closing)\\s+balance\\b", "\\bsort\\s+code\\s*[:\\-]?\\s*\\d{2}[-\\s]\\d{2}[-\\s]\\d{2}", "\\biban\\s*[:\\-]?\\s*[A-Z]{2}\\d{2}"]
-  },
-  "receipt": {
-    "description": "Retail receipt",
-    "keywords": ["receipt", "thank you for your purchase", "total paid", "change due", "cashier", "payment method", "items purchased", "amount tendered"],
-    "patterns": ["\\breceip[t]?\\b", "\\btotal\\s+paid\\b", "\\bchange\\s+due\\b"]
-  },
   "contract": {
     "description": "Contract, agreement, or legal instrument",
     "keywords": ["agreement", "whereas", "hereby", "party", "parties", "governing law", "termination", "indemnification", "warranty", "confidentiality", "intellectual property", "jurisdiction", "effective date", "obligations", "in witness whereof", "witnesseth", "heretofore", "notwithstanding", "indemnify", "licensor", "licensee", "arbitration", "consideration"],

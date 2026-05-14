@@ -60,7 +60,9 @@ class GeminiClient:
             )
             retry_raw = retry.text or ""
             if not retry_raw.strip():
-                raise json.JSONDecodeError("Gemini returned an empty response twice.", retry_raw, 0)
+                raise json.JSONDecodeError(
+                    "Gemini returned an empty response twice.", retry_raw, 0
+                ) from exc
             return _parse_json(retry_raw)
 
 

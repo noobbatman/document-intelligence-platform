@@ -16,65 +16,36 @@ def _make_ocr(text: str) -> OCRResult:
     )
 
 
-class TestInvoiceExtractor:
-    def test_extracts_known_fields(self) -> None:
-        text = (
-            "Invoice Number: INV-2024-001\n"
-            "Invoice Date: 2024-01-15\n"
-            "Due Date: 2024-02-15\n"
-            "Bill To: Acme Corp\n"
-            "Subtotal: $950.00\n"
-            "Tax: $95.00\n"
-            "Total Due: $1,045.00"
-        )
-        result = get_extractor("invoice").extract(_make_ocr(text))
-        assert result.document_type == "invoice"
-        assert result.fields.get("invoice_number") is not None
-        assert result.fields.get("total_amount") is not None
-        assert "required_fields" in result.metadata
-
-    def test_missing_fields_are_none_not_missing(self) -> None:
-        result = get_extractor("invoice").extract(_make_ocr("just some random text"))
-        assert "invoice_number" in result.fields  # key present, value may be None
-        assert "total_amount" in result.fields
-
-
-class TestBankStatementExtractor:
-    def test_extracts_balances(self) -> None:
-        text = (
-            "Statement Period: 2024-07-01 to 2024-07-31\n"
-            "Account Number: 0012-3456\n"
-            "Opening Balance: £1,200.00\n"
-            "Closing Balance: £1,360.00\n"
-            "Available Balance: £1,360.00"
-        )
-        result = get_extractor("bank_statement").extract(_make_ocr(text))
-        assert result.document_type == "bank_statement"
-        assert result.fields.get("account_number") is not None
-        assert result.fields.get("closing_balance") is not None
-
-
-class TestReceiptExtractor:
-    def test_extracts_total(self) -> None:
-        text = "RECEIPT\nThank you for your purchase\nTotal Paid: $25.99\nVisa ending 4321"
-        result = get_extractor("receipt").extract(_make_ocr(text))
-        assert result.document_type == "receipt"
-        assert result.fields.get("total_amount") is not None
-
-    def test_extracts_multiline_store_date_and_tax(self) -> None:
-        text = "BARDS QUILL\nDate: 08 Jul 2024\nVAT (20% incl.): 2.61\nTotal Paid: 15.00\n"
-        result = get_extractor("receipt").extract(_make_ocr(text))
-        assert result.fields.get("store_name") == "BARDS QUILL"
-        assert result.fields.get("receipt_date") == "08 Jul 2024"
-        assert result.fields.get("tax") == 2.61
-
-
 class TestContractExtractor:
     def test_extracts_parties(self) -> None:
         text = "This Agreement is between Party A: Acme Ltd and Party B: Globex Inc. Effective Date: 2024-01-01. Governing Law: England."
         result = get_extractor("contract").extract(_make_ocr(text))
         assert result.document_type == "contract"
         assert "effective_date" in result.fields
+
+
+class TestLegalComplaintExtractor:
+    def test_extracts_complaint_fields(self) -> None:
+        text = (
+            "UNITED STATES DISTRICT COURT FOR THE EASTERN DISTRICT OF WISCONSIN\n"
+            "Civil Action No. 23-cv-1001\n"
+            "Jane Doe, Plaintiff, v. Landmark Credit Union, Defendant.\n"
+            "COMPLAINT FOR DAMAGES DEMAND FOR JURY TRIAL\n"
+            "This Court has jurisdiction under 28 U.S.C. § 1331 and 28 U.S.C. § 1343.\n"
+            "Venue is proper under 28 U.S.C. § 1391(b).\n"
+            "COUNT I Violation of the Right to Financial Privacy Act\n"
+            "COUNT II Civil Conspiracy\n"
+            "PRAYER FOR RELIEF Plaintiffs request declaratory relief and damages.\n"
+            "DEMAND FOR JURY TRIAL"
+        )
+        result = get_extractor("legal_complaint").extract(_make_ocr(text))
+        assert result.document_type == "legal_complaint"
+        assert result.fields["case_number"] == "23-cv-1001"
+        assert result.fields["claims"]
+        assert "1331" in result.fields["jurisdiction"]
+        assert "1391" in result.fields["venue"]
+        assert result.fields["relief_sought"]
+        assert result.fields["jury_demand"] is True
 
 
 class TestUnknownExtractor:
@@ -86,12 +57,13 @@ class TestUnknownExtractor:
 
 class TestExtractorFactory:
     @pytest.mark.parametrize(
-        "doc_type,expected",
+        ("doc_type", "expected"),
         [
-            ("invoice", "invoice"),
-            ("bank_statement", "bank_statement"),
-            ("receipt", "receipt"),
             ("contract", "contract"),
+            ("legal_complaint", "legal_complaint"),
+            ("legal_notice", "legal_notice"),
+            ("case_brief", "case_brief"),
+            ("affidavit", "affidavit"),
             ("unknown", "unknown"),
             ("garbage_type", "unknown"),  # falls back gracefully
         ],

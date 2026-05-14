@@ -24,8 +24,8 @@ def test_default_rate_limit_enforced(client, monkeypatch) -> None:
 
     http_runtime.rate_limiter.reset()
 
-    first = client.get("/api/v1/analytics/metrics/overview", headers={"X-Tenant-ID": "tenant-a"})
-    second = client.get("/api/v1/analytics/metrics/overview", headers={"X-Tenant-ID": "tenant-a"})
+    first = client.get("/api/v1/documents", headers={"X-Tenant-ID": "tenant-a"})
+    second = client.get("/api/v1/documents", headers={"X-Tenant-ID": "tenant-a"})
 
     http_runtime.rate_limiter.reset()
 
@@ -75,7 +75,7 @@ def test_rate_limit_header_present_on_normal_request(client, monkeypatch) -> Non
     monkeypatch.setattr(settings, "rate_limit_default_per_minute", 120)
 
     http_runtime.rate_limiter.reset()
-    r = client.get("/api/v1/analytics/metrics/overview")
+    r = client.get("/api/v1/documents")
     http_runtime.rate_limiter.reset()
 
     assert "X-RateLimit-Limit" in r.headers

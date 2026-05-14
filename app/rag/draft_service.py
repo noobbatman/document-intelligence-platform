@@ -173,7 +173,8 @@ class DraftService:
         draft.status = DraftStatus.reviewed
         draft.updated_at = datetime.now(UTC)
         self.preferences.update_effectiveness_after_review(
-            draft, edited_section_keys=[e.section_key for e in edits]
+            draft,
+            edited_section_keys=[edit.section_key for edit in edits],
         )
         if edits:
             draft.content = content
@@ -236,24 +237,25 @@ class DraftService:
                 current = by_id.get(chunk.chunk_id)
                 if current is None or chunk.similarity_score > current.similarity_score:
                     by_id[chunk.chunk_id] = chunk
-        for chunk in self._keyword_support_chunks(document_id, draft_type, document_type):
+        for chunk in self._keyword_support_chunks(document_id, document_type):
             by_id.setdefault(chunk.chunk_id, chunk)
         return self._select_diverse_chunks(list(by_id.values()))
 
-    def _keyword_support_chunks(
-        self, document_id: str, draft_type: str, document_type: str
-    ) -> list[RetrievedChunk]:
-        template = load_draft_template(draft_type) or {}
-        override = template.get("document_type_overrides", {}).get(document_type, {})
-        terms = [
-            *template.get("support_terms", []),
-            *override.get("support_terms", []),
-        ]
-        if not terms:
+    def _keyword_support_chunks(self, document_id: str, document_type: str) -> list[RetrievedChunk]:
+        if document_type != "legal_complaint":
             return []
-        limit_per_term = int(
-            override.get("support_limit_per_term") or template.get("support_limit_per_term") or 3
-        )
+        terms = [
+            "count ",
+            "prayer for relief",
+            "relief",
+            "jurisdiction",
+            "venue",
+            "subpoena",
+            "right to financial privacy",
+            "RFPA",
+            "conspiracy",
+            "void",
+        ]
         chunks: list[RetrievedChunk] = []
         seen: set[str] = set()
         for term in terms:
@@ -263,7 +265,7 @@ class DraftService:
                     .where(DocumentChunk.document_id == document_id)
                     .where(DocumentChunk.text.ilike(f"%{term}%"))
                     .order_by(DocumentChunk.chunk_index.asc())
-                    .limit(limit_per_term)
+                    .limit(3)
                 )
             )
             for chunk in matches:
@@ -326,7 +328,19 @@ class DraftService:
             )
 
         draft_date = self._draft_date()
-        template_rules = self._template_default_rules(draft_type)
+        memo_rules = ""
+        if draft_type == "internal_memo":
+            template = load_draft_template(draft_type) or {}
+            defaults = template.get("defaults", {})
+            memo_to = defaults.get("to", "Senior Partner")
+            memo_from = defaults.get("from", "Legal Document Analyst")
+            memo_rules = f"""
+
+INTERNAL MEMO TEMPLATE RULES:
+- Use TO: {memo_to}.
+- Use FROM: {memo_from}.
+- Use DATE: {draft_date}.
+- Treat TO, FROM, and DATE as template metadata, not document facts; do not mark them unsupported only because they are absent from the source."""
         return f"""You are a legal document analyst for Pearson Specter Litt. Your task is to produce a {draft_type} based strictly on the provided source material.
 
 STRICT GROUNDING RULES:
@@ -336,7 +350,7 @@ STRICT GROUNDING RULES:
 4. Use formal legal memo style.
 5. If the draft needs a memo date, use exactly this date: {draft_date}. Do not invent filing, review, or memo dates.
 6. Normalize obvious OCR artifacts only when the intended term is clear from context; for example, use "Landmark Credit Union" when OCR shows "Iandmark Credit Union".
-{template_rules}
+{memo_rules}
 {preference_block}
 
 Respond in JSON with this structure:
@@ -356,6 +370,9 @@ Respond in JSON with this structure:
             )
             for idx, chunk in enumerate(chunks, 1)
         )
+        draft_instructions = self._draft_specific_instructions(
+            draft_type, document.document_type or "unknown"
+        )
         template_instructions = self._template_instructions(
             draft_type, document.document_type or "unknown"
         )
@@ -363,27 +380,11 @@ Respond in JSON with this structure:
             f"DOCUMENT TYPE: {document.document_type or 'unknown'}\n"
             f"DRAFT DATE: {self._draft_date()}\n"
             f"STRUCTURED FIELDS EXTRACTED: {json.dumps(structured_fields, default=str)}\n\n"
+            f"{draft_instructions}\n\n"
             f"{template_instructions}\n\n"
             f"SOURCE CHUNKS (ordered by relevance):\n---\n{chunk_block}\n---\n\n"
             f"Generate a {draft_type} for this document."
         )
-
-    def _template_default_rules(self, draft_type: str) -> str:
-        template = load_draft_template(draft_type) or {}
-        defaults = template.get("defaults", {})
-        if not defaults:
-            return ""
-        resolved = {
-            key: (self._draft_date() if value == "{{draft_date}}" else value)
-            for key, value in defaults.items()
-        }
-        lines = ["", "TEMPLATE DEFAULT RULES:"]
-        for key, value in resolved.items():
-            lines.append(f"- Use {key.upper()}: {value}.")
-        lines.append(
-            "- Treat template defaults as metadata, not document facts; do not mark them unsupported only because they are absent from the source."
-        )
-        return "\n".join(lines)
 
     def _template_instructions(self, draft_type: str, document_type: str) -> str:
         template = load_draft_template(draft_type)
@@ -410,12 +411,23 @@ Respond in JSON with this structure:
                 f"- {section.get('title', section.get('key'))} ({required}): "
                 f"{section.get('instruction', '')}"
             )
-        override = template.get("document_type_overrides", {}).get(document_type, {})
-        if override.get("instructions"):
-            lines.append(f"{document_type} instructions:")
-            for instruction in override["instructions"]:
-                lines.append(f"- {instruction}")
         return "\n".join(lines)
+
+    def _draft_specific_instructions(self, draft_type: str, document_type: str) -> str:
+        instructions: list[str] = []
+        if draft_type == "internal_memo" and document_type == "legal_complaint":
+            instructions.append(
+                "For the Claims Asserted section, enumerate each cause of action by count number or title, "
+                "include the statute or legal basis cited in the source when present, and summarize the "
+                "specific factual basis alleged for that count."
+            )
+        if draft_type == "internal_memo":
+            instructions.append(
+                "The memo header should use TO: Senior Partner, FROM: Legal Document Analyst, and the provided DRAFT DATE."
+            )
+        if not instructions:
+            return "DRAFT-SPECIFIC INSTRUCTIONS: Follow the requested draft type."
+        return "DRAFT-SPECIFIC INSTRUCTIONS:\n- " + "\n- ".join(instructions)
 
     def _normalize_content(self, payload: dict[str, Any]) -> dict[str, Any]:
         sections = payload.get("sections", [])
