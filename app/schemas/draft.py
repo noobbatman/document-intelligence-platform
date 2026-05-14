@@ -12,6 +12,9 @@ DraftTypeLiteral = Literal[
     "notice_summary",
     "document_checklist",
     "affidavit_summary",
+    "affidavit",
+    "case_brief",
+    "legal_notice",
 ]
 
 
@@ -37,6 +40,7 @@ class DraftRead(BaseModel):
     evidence_chunk_ids: list[str] = Field(default_factory=list)
     generation_version: int
     word_count: int
+    overall_grounding_score: float | None = None
     model_id: str | None = None
     preferences_applied: list[str] = Field(default_factory=list)
     created_at: datetime
