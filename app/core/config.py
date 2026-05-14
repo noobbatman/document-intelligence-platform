@@ -58,6 +58,15 @@ class Settings(BaseSettings):
 
     # ── OCR ───────────────────────────────────────────────────────────────────
     ocr_engine: str = Field(default="tesseract", alias="OCR_ENGINE")
+    ocr_preprocess: bool = Field(default=True, alias="OCR_PREPROCESS")
+    ocr_deskew: bool = Field(default=True, alias="OCR_DESKEW")
+    ocr_denoise: bool = Field(default=True, alias="OCR_DENOISE")
+    ocr_enhance_contrast: bool = Field(default=True, alias="OCR_ENHANCE_CONTRAST")
+    ocr_engine_primary: str = Field(default="tesseract", alias="OCR_ENGINE_PRIMARY")
+    handwriting_confidence_threshold: float = Field(
+        default=0.70, alias="HANDWRITING_CONFIDENCE_THRESHOLD"
+    )
+    pdf_render_zoom: float = Field(default=3.0, alias="PDF_RENDER_ZOOM")
     spacy_model: str = Field(default="en_core_web_sm", alias="SPACY_MODEL")
 
     # ── Pipeline ──────────────────────────────────────────────────────────────

@@ -113,10 +113,21 @@ def list_preferences(
     db: Session = DB_DEP,
     tenant_id: str | None = TENANT_DEP,
 ) -> list[DraftPreferenceRead]:
-    return [
-        DraftPreferenceRead.model_validate(pref)
-        for pref in PreferenceService(db).list_preferences(tenant_id)
-    ]
+    items: list[DraftPreferenceRead] = []
+    for pref in PreferenceService(db).list_preferences(tenant_id):
+        item = DraftPreferenceRead.model_validate(pref)
+        if pref.source_edit_id:
+            edit = db.get(DraftEdit, pref.source_edit_id)
+            if edit:
+                item.source_edit = {
+                    "section_key": edit.section_key,
+                    "original_content": edit.original_content,
+                    "edited_content": edit.edited_content,
+                    "reviewer_name": edit.reviewer_name,
+                    "created_at": edit.created_at.isoformat(),
+                }
+        items.append(item)
+    return items
 
 
 @router.delete("/preferences/{preference_id}", status_code=status.HTTP_204_NO_CONTENT)

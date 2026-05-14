@@ -98,6 +98,7 @@ document.addEventListener('alpine:init', () => {
       selDoc: null,
       selResult: null,
       selHistory: [],
+      detailTab: 'drafts',
       modalLoading: false,
       reviewTasks: [],
       reviewLoading: false,
@@ -113,12 +114,16 @@ document.addEventListener('alpine:init', () => {
       ocrDist: null,
       corrStats: null,
       preferences: [],
+      preferenceFilter: '',
       drafts: [],
+      draftEvidence: {},
+      selectedDraftIndex: 0,
       draftType: 'internal_memo',
       draftLoading: false,
       draftReviewer: localStorage.getItem('di_draft_reviewer') || '',
       draftEditKey: '',
       draftEditedContent: '',
+      toast: null,
       _charts: {},
 
       async init() {
@@ -134,6 +139,7 @@ document.addEventListener('alpine:init', () => {
         if (v === 'documents') this._loadDocs(0);
         if (v === 'review') this._loadReview();
         if (v === 'analytics') this._loadAnalytics();
+        if (v === 'preferences') this._loadPreferences();
       },
 
       async _fetch(path, opts = {}) {
@@ -234,13 +240,31 @@ document.addEventListener('alpine:init', () => {
         return Math.max(1, Math.ceil(this.docsTotal / this.docsPerPage));
       },
 
+      get currentDraft() {
+        return this.drafts[this.selectedDraftIndex] || null;
+      },
+
+      get currentEvidence() {
+        const draft = this.currentDraft;
+        return draft ? (this.draftEvidence[draft.id] || []) : [];
+      },
+
+      get filteredPreferences() {
+        if (!this.preferenceFilter) return this.preferences;
+        return this.preferences.filter(p => p.document_type === this.preferenceFilter);
+      },
+
       async openDoc(doc) {
+        this.view = 'detail';
+        this.detailTab = 'drafts';
         this.selDoc = doc;
         this.selResult = null;
         this.selHistory = [];
         this.drafts = [];
+        this.draftEvidence = {};
+        this.selectedDraftIndex = 0;
         this.draftEditKey = '';
-        this.showModal = true;
+        this.showModal = false;
         this.modalLoading = true;
         try {
           const [res, hist, drafts] = await Promise.all([
@@ -251,15 +275,24 @@ document.addEventListener('alpine:init', () => {
           this.selResult = res;
           this.selHistory = Array.isArray(hist) ? hist : [];
           this.drafts = Array.isArray(drafts) ? drafts : [];
+          this.selectedDraftIndex = Math.max(0, this.drafts.length - 1);
+          await this._hydrateDraftEvidence();
         } catch (_) {
         }
         this.modalLoading = false;
       },
 
-      closeModal() {
+      backToDocuments() {
         this.showModal = false;
         this.selDoc = null;
         this.drafts = [];
+        this.draftEvidence = {};
+        this.detailTab = 'drafts';
+        this._go('documents');
+      },
+
+      closeModal() {
+        this.backToDocuments();
       },
 
       async loadDrafts() {
@@ -267,10 +300,56 @@ document.addEventListener('alpine:init', () => {
         this.draftLoading = true;
         try {
           this.drafts = await this._fetch(`/documents/${this.selDoc.id}/drafts`) || [];
+          this.selectedDraftIndex = Math.max(0, this.drafts.length - 1);
+          await this._hydrateDraftEvidence();
         } catch (e) {
           alert('Draft load failed: ' + e.message);
         }
         this.draftLoading = false;
+      },
+
+      async _hydrateDraftEvidence() {
+        if (!this.selDoc || !Array.isArray(this.drafts)) return;
+        await Promise.all(this.drafts.map(draft => this._loadDraftEvidence(draft).catch(() => null)));
+      },
+
+      async _loadDraftEvidence(draft) {
+        if (!this.selDoc || !draft?.id || this.draftEvidence[draft.id]) return;
+        const chunks = await this._fetch(`/documents/${this.selDoc.id}/drafts/${draft.id}/evidence`);
+        this.draftEvidence = { ...this.draftEvidence, [draft.id]: Array.isArray(chunks) ? chunks : [] };
+      },
+
+      sectionEvidence(draft, section) {
+        const ids = new Set(section?.evidence_chunk_ids || []);
+        return (this.draftEvidence[draft?.id] || []).filter(chunk => ids.has(chunk.id));
+      },
+
+      evidenceLabel(chunk) {
+        const section = chunk.section_header ? ` - ${chunk.section_header}` : '';
+        return `Page ${chunk.page_number}${section} | Chunk ${chunk.chunk_index}`;
+      },
+
+      selectDraft(index) {
+        if (index < 0 || index >= this.drafts.length) return;
+        this.selectedDraftIndex = index;
+        this._loadDraftEvidence(this.currentDraft).catch(() => null);
+      },
+
+      confidenceClass(confidence) {
+        if (confidence === 'high') return 'badge-success';
+        if (confidence === 'unsupported' || confidence === 'low') return 'badge-error';
+        return 'badge-warn';
+      },
+
+      isUnsupported(section) {
+        return section?.confidence === 'unsupported' || String(section?.content || '').includes('[UNSUPPORTED');
+      },
+
+      showToast(message) {
+        this.toast = message;
+        window.setTimeout(() => {
+          if (this.toast === message) this.toast = null;
+        }, 7000);
       },
 
       async generateDraft() {
@@ -297,6 +376,8 @@ document.addEventListener('alpine:init', () => {
       async submitDraftEdit(draft, section) {
         if (!this.selDoc || !this.draftReviewer.trim()) return;
         try {
+          const before = await this._fetch('/preferences').catch(() => []);
+          const beforeIds = new Set((Array.isArray(before) ? before : []).map(p => p.id));
           await this._fetch(`/documents/${this.selDoc.id}/drafts/${draft.id}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -306,7 +387,17 @@ document.addEventListener('alpine:init', () => {
             }),
           });
           this.draftEditKey = '';
+          this.showToast('Draft edit saved. Watching for a learned preference...');
           await this.loadDrafts();
+          window.setTimeout(async () => {
+            const after = await this._fetch('/preferences').catch(() => []);
+            if (!Array.isArray(after)) return;
+            this.preferences = after;
+            const learned = after.find(p => !beforeIds.has(p.id));
+            if (learned) {
+              this.showToast(`Preference extracted - "${learned.preference_text}"`);
+            }
+          }, 5000);
         } catch (e) {
           alert('Draft edit failed: ' + e.message);
         }
@@ -387,6 +478,17 @@ document.addEventListener('alpine:init', () => {
           this.corrStats = corr;
           this.preferences = Array.isArray(prefs) ? prefs : [];
           this.$nextTick(() => this._renderCharts());
+        } catch (e) {
+          this.analyticsError = e.message;
+        }
+        this.analyticsLoading = false;
+      },
+
+      async _loadPreferences() {
+        this.analyticsLoading = true;
+        this.analyticsError = '';
+        try {
+          this.preferences = await this._fetch('/preferences') || [];
         } catch (e) {
           this.analyticsError = e.message;
         }

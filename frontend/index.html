@@ -21,11 +21,10 @@
     </div>
     <div class="nav-section">
       <div class="nav-label">Workflow</div>
-      <div class="nav-item" :class="{active: view==='review'}" @click="_go('review')">
-        <span class="icon">&#10003;</span><span class="nav-label-text">Review queue</span>
-        <span class="nav-badge" x-show="reviewTasks.length > 0" x-text="reviewTasks.length"></span>
+      <div class="nav-item" :class="{active: view==='preferences'}" @click="_go('preferences')">
+        <span class="icon">&#9670;</span><span class="nav-label-text">Preferences</span>
+        <span class="nav-badge" x-show="preferences.length > 0" x-text="preferences.length"></span>
       </div>
-      <div class="nav-item" :class="{active: view==='analytics'}" @click="_go('analytics')"><span class="icon">&#9650;</span><span class="nav-label-text">Analytics</span></div>
     </div>
     <div class="sidebar-footer">
       <div class="form-label" style="margin-bottom:4px">API key</div>
@@ -35,10 +34,11 @@
 
   <div class="main">
     <div class="topbar">
-      <h1 x-text="{dashboard:'Dashboard',upload:'Upload documents',documents:'Documents',review:'Review queue',analytics:'Analytics'}[view] || view"></h1>
+      <h1 x-text="view === 'detail' ? (selDoc?.filename || 'Document detail') : ({dashboard:'Dashboard',upload:'Upload documents',documents:'Documents',preferences:'Preferences'}[view] || view)"></h1>
       <div class="topbar-actions">
+        <template x-if="view==='detail'"><button class="btn btn-sm" @click="backToDocuments()">&#8592; Back</button></template>
         <template x-if="view==='documents'"><button class="btn btn-primary btn-sm" @click="view='upload'; uploadResults=[];">&#8679; Upload</button></template>
-        <template x-if="view==='review'"><button class="btn btn-sm" @click="_loadReview()">&#8635; Refresh</button></template>
+        <template x-if="view==='preferences'"><button class="btn btn-sm" @click="_loadPreferences()">&#8635; Refresh</button></template>
       </div>
     </div>
 
@@ -117,7 +117,13 @@
             <option value="">All statuses</option><option value="uploaded">Uploaded</option><option value="queued">Queued</option><option value="processing">Processing</option><option value="completed">Completed</option><option value="review_required">Review required</option><option value="failed">Failed</option>
           </select>
           <select class="input input-sm" x-model="filterType" @change="_loadDocs(0)">
-            <option value="">All types</option><option value="invoice">Invoice</option><option value="bank_statement">Bank statement</option><option value="receipt">Receipt</option><option value="contract">Contract</option>
+            <option value="">All types</option>
+            <option value="legal_complaint">Legal complaint</option>
+            <option value="contract">Contract</option>
+            <option value="affidavit">Affidavit</option>
+            <option value="legal_notice">Legal notice</option>
+            <option value="case_brief">Case brief</option>
+            <option value="unknown">Unknown</option>
           </select>
           <div class="spacer"></div><span class="text-sm text-muted" x-text="docsTotal + ' total'"></span><button class="btn btn-sm" @click="_loadDocs(docsPage)">&#8635;</button>
         </div>
@@ -147,156 +153,181 @@
         </template>
       </div>
 
-      <div x-show="view==='review'">
-        <template x-if="reviewLoading"><div class="empty"><div class="spinner"></div></div></template>
-        <template x-if="reviewError"><div class="empty"><span class="badge badge-error" x-text="reviewError"></span></div></template>
-        <template x-if="!reviewLoading && reviewTasks.length">
-          <div class="grid-2" style="align-items:start">
-            <div>
-              <div class="mb-8 text-sm text-muted" x-text="reviewTasks.length + ' pending task(s)'"></div>
-              <div style="display:flex;flex-direction:column;gap:8px">
-                <template x-for="t in reviewTasks" :key="t.id"><div class="task-card" :class="{selected: selTask?.id === t.id}" @click="selectTask(t)"><h3 x-text="t.field_name.replace(/_/g,' ')"></h3><div class="task-meta"><span x-text="'Conf: ' + fmtConf(t.confidence)"></span><span class="truncate" x-text="t.document_id.slice(0,8) + '...'"></span><span x-show="t.page_number" x-text="'p.' + t.page_number"></span></div><div class="snippet mt-12" x-show="t.source_snippet" x-text="t.source_snippet"></div></div></template>
-              </div>
-            </div>
-            <div class="review-panel" x-show="selTask">
-              <h3 style="font-size:15px;font-weight:500;margin-bottom:16px" x-text="selTask?.field_name?.replace(/_/g,' ')"></h3>
-              <div class="field-row"><span class="field-key">Current value</span><span class="field-val mono" x-text="fmtField(selTask?.proposed_value?.value)"></span></div>
-              <div class="field-row"><span class="field-key">Confidence</span><span class="field-val" :style="'color:' + confColor(selTask?.confidence)" x-text="fmtConf(selTask?.confidence)"></span></div>
-              <div class="form-group mt-16"><label class="form-label">Corrected value</label><input class="input w-full" x-model="correctedValue"></div>
-              <div class="form-group"><label class="form-label">Your name</label><input class="input w-full" x-model="reviewerName"></div>
-              <div class="form-group"><label class="form-label">Comment</label><textarea class="input w-full" x-model="reviewComment" rows="2"></textarea></div>
-              <div class="flex gap-8"><button class="btn btn-primary" @click="submitReview()" :disabled="reviewSubmitting || !reviewerName.trim()">Submit correction</button><button class="btn" @click="selTask=null">Cancel</button></div>
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <div x-show="view==='analytics'">
-        <template x-if="analyticsLoading"><div class="empty"><div class="spinner"></div></div></template>
-        <template x-if="analyticsError"><div class="empty"><span class="badge badge-error" x-text="analyticsError"></span></div></template>
-        <template x-if="!analyticsLoading && analyticsMetrics">
-          <div>
-            <div class="kpi-grid" style="margin-bottom:20px">
-              <div class="kpi-card"><div class="kpi-label">Total documents</div><div class="kpi-value" x-text="analyticsMetrics.total_documents ?? 0"></div></div>
-              <div class="kpi-card"><div class="kpi-label">Avg confidence</div><div class="kpi-value" x-text="analyticsMetrics.avg_document_confidence != null ? fmtConf(analyticsMetrics.avg_document_confidence) : '—'"></div></div>
-              <div class="kpi-card"><div class="kpi-label">Pending review</div><div class="kpi-value" x-text="analyticsMetrics.pending_review_tasks ?? 0"></div></div>
-              <div class="kpi-card"><div class="kpi-label">Corrections logged</div><div class="kpi-value" x-text="analyticsMetrics.total_corrections ?? 0"></div></div>
-            </div>
-            <div class="grid-3">
-              <div class="card" style="grid-column:span 2"><div class="card-title">OCR confidence distribution</div><div class="chart-wrap"><canvas id="chart-ocr"></canvas></div></div>
-              <div class="card"><div class="card-title">Document types</div><div class="chart-wrap"><canvas id="chart-types"></canvas></div></div>
-            </div>
-            <div class="card mt-20"><div class="card-title">Fields with most corrections</div><div class="chart-wrap"><canvas id="chart-corrections"></canvas></div></div>
-            <div class="card mt-20">
-              <div class="card-title">Learned draft preferences</div>
-              <div class="table-wrap" x-show="preferences.length">
-                <table>
-                  <thead><tr><th>Preference</th><th>Type</th><th>Uses</th><th>Score</th><th style="width:80px"></th></tr></thead>
-                  <tbody>
-                    <template x-for="p in preferences" :key="p.id">
-                      <tr>
-                        <td x-text="p.preference_text"></td>
-                        <td class="mono text-sm" x-text="p.document_type"></td>
-                        <td x-text="p.application_count"></td>
-                        <td x-text="p.effectiveness_score != null ? fmtConf(p.effectiveness_score) : '—'"></td>
-                        <td><button class="btn btn-sm btn-danger" @click="deletePreference(p.id)">&times;</button></td>
-                      </tr>
-                    </template>
-                  </tbody>
-                </table>
-              </div>
-              <div class="empty" x-show="!preferences.length"><span class="text-muted">No learned preferences yet.</span></div>
-            </div>
-          </div>
-        </template>
-      </div>
-    </div>
-  </div>
-
-  <div class="modal-overlay" x-show="showModal" @click.self="closeModal()" style="display:none">
-    <div class="modal" x-show="showModal" @keydown.escape.window="closeModal()">
-      <div class="modal-header">
-        <h2 x-text="selDoc?.filename || 'Document detail'"></h2>
-        <div class="flex gap-8 items-center"><span class="badge" :class="sb(selDoc?.status)" x-text="selDoc?.status?.replace(/_/g,' ')"></span><button class="modal-close" @click="closeModal()">&times;</button></div>
-      </div>
-      <div class="modal-body">
-        <template x-if="modalLoading"><div class="empty" style="padding:40px"><div class="spinner"></div></div></template>
+      <div x-show="view==='detail'">
+        <template x-if="modalLoading"><div class="empty"><div class="spinner"></div></div></template>
         <template x-if="!modalLoading && selDoc">
-          <div>
-            <div class="flex gap-12 mb-12" style="flex-wrap:wrap">
-              <span class="stat-pill mono text-sm" x-text="selDoc.id?.slice(0,8) + '...'"></span>
-              <span class="stat-pill" x-text="selDoc.document_type || 'unknown type'"></span>
-              <span class="stat-pill" x-text="fmtDate(selDoc.created_at)"></span>
-            </div>
-            <div class="grid-2" style="align-items:start">
+          <div class="detail-page">
+            <div class="detail-summary">
               <div>
-                <div class="card-title">Extracted fields</div>
-                <template x-for="[k, v] in Object.entries(selResult?.fields || {})" :key="k"><div class="field-row"><span class="field-key" x-text="k.replace(/_/g,' ')"></span><span class="field-val mono" x-text="fmtField(v)"></span></div></template>
+                <div class="flex gap-8 items-center mb-8">
+                  <span class="badge" :class="sb(selDoc.status)" x-text="selDoc.status?.replace(/_/g,' ')"></span>
+                  <span class="stat-pill mono text-sm" x-text="selDoc.document_type || 'unknown'"></span>
+                  <span class="stat-pill" x-text="fmtDate(selDoc.created_at)"></span>
+                </div>
+                <div class="text-sm text-muted mono" x-text="selDoc.id"></div>
               </div>
-              <div>
-                <div class="card-title">Field confidence</div>
-                <div style="display:flex;flex-direction:column;gap:8px">
-                  <template x-for="fc in (selResult?.field_confidences || [])" :key="fc.name">
-                    <div>
-                      <div class="flex items-center gap-8 mb-12" style="margin-bottom:4px"><span class="text-sm" style="min-width:120px" x-text="fc.name.replace(/_/g,' ')"></span></div>
-                      <div class="conf-bar"><div class="conf-track"><div class="conf-fill" :style="'width:' + Math.round(fc.confidence*100) + '%;background:' + confColor(fc.confidence)"></div></div><span class="conf-label" :style="'color:' + confColor(fc.confidence)" x-text="fmtConf(fc.confidence)"></span></div>
-                    </div>
-                  </template>
+              <div class="detail-tabs">
+                <button class="tab-btn" :class="{active: detailTab==='drafts'}" @click="detailTab='drafts'">Drafts</button>
+                <button class="tab-btn" :class="{active: detailTab==='extraction'}" @click="detailTab='extraction'">Extraction</button>
+                <button class="tab-btn" :class="{active: detailTab==='evidence'}" @click="detailTab='evidence'; if (currentDraft) _loadDraftEvidence(currentDraft)">Evidence</button>
+              </div>
+            </div>
+
+            <div x-show="detailTab==='drafts'">
+              <div class="draft-toolbar">
+                <div class="flex gap-8 items-center">
+                  <select class="input input-sm" x-model="draftType">
+                    <option value="internal_memo">Internal memo</option>
+                    <option value="case_fact_summary">Case fact summary</option>
+                    <option value="contract_summary">Contract summary</option>
+                    <option value="notice_summary">Notice summary</option>
+                    <option value="document_checklist">Document checklist</option>
+                    <option value="affidavit_summary">Affidavit summary</option>
+                  </select>
+                  <button class="btn btn-primary btn-sm" @click="generateDraft()" :disabled="draftLoading">Generate</button>
+                  <button class="btn btn-sm" @click="loadDrafts()" :disabled="draftLoading">&#8635;</button>
+                </div>
+                <div class="flex gap-8 items-center" x-show="drafts.length">
+                  <button class="btn btn-sm" @click="selectDraft(selectedDraftIndex - 1)" :disabled="selectedDraftIndex === 0">&#9664;</button>
+                  <span class="text-sm text-muted" x-text="'Draft v' + (currentDraft?.generation_version || selectedDraftIndex + 1) + ' · ' + (currentDraft?.word_count || 0) + ' words · ' + (currentDraft?.status || '')"></span>
+                  <button class="btn btn-sm" @click="selectDraft(selectedDraftIndex + 1)" :disabled="selectedDraftIndex >= drafts.length - 1">&#9654;</button>
                 </div>
               </div>
-            </div>
-            <div class="card mt-20">
-              <div class="card-title">Drafts</div>
-              <div class="filter-bar" style="padding:0;margin-bottom:12px">
-                <select class="input input-sm" x-model="draftType">
-                  <option value="internal_memo">Internal memo</option>
-                  <option value="case_fact_summary">Case fact summary</option>
-                  <option value="contract_summary">Contract summary</option>
-                  <option value="notice_summary">Notice summary</option>
-                  <option value="document_checklist">Document checklist</option>
-                  <option value="affidavit_summary">Affidavit summary</option>
-                </select>
-                <button class="btn btn-primary btn-sm" @click="generateDraft()" :disabled="draftLoading">Generate</button>
-                <button class="btn btn-sm" @click="loadDrafts()" :disabled="draftLoading">&#8635;</button>
-              </div>
+
               <template x-if="draftLoading"><div class="empty"><div class="spinner"></div></div></template>
-              <template x-if="!draftLoading && drafts.length">
-                <div style="display:flex;flex-direction:column;gap:16px">
-                  <template x-for="draft in drafts" :key="draft.id">
-                    <div class="review-panel" style="display:block">
-                      <div class="flex items-center gap-8 mb-12" style="justify-content:space-between">
-                        <div><span class="mono text-sm" x-text="draft.draft_type"></span> <span class="badge" :class="draft.status === 'draft' ? 'badge-success' : 'badge-warn'" x-text="draft.status"></span></div>
-                        <span class="text-sm text-muted" x-text="draft.word_count + ' words'"></span>
+              <template x-if="!draftLoading && !drafts.length">
+                <div class="empty"><span class="text-muted">No drafts yet. Generate an internal memo to start review.</span></div>
+              </template>
+              <template x-if="!draftLoading && currentDraft">
+                <div class="draft-shell">
+                  <template x-for="section in (currentDraft.content?.sections || [])" :key="section.key">
+                    <section class="draft-section" :class="{unsupported: isUnsupported(section)}">
+                      <div class="draft-section-head">
+                        <h2 x-text="section.title"></h2>
+                        <span class="badge" :class="confidenceClass(section.confidence)" x-text="section.confidence || 'medium'"></span>
                       </div>
-                      <template x-for="section in (draft.content?.sections || [])" :key="section.key">
-                        <div class="card" style="box-shadow:none;border:1px solid var(--border);margin-bottom:10px">
-                          <div class="flex items-center gap-8" style="justify-content:space-between">
-                            <div class="card-title" x-text="section.title"></div>
-                            <span class="badge" :class="section.confidence === 'high' ? 'badge-success' : (section.confidence === 'unsupported' ? 'badge-error' : 'badge-warn')" x-text="section.confidence"></span>
+                      <p class="draft-content" x-text="section.content"></p>
+                      <div class="evidence-list" x-show="section.evidence_chunk_ids?.length">
+                        <div class="text-sm text-muted mb-8" x-text="sectionEvidence(currentDraft, section).length + ' evidence chunk(s)'"></div>
+                        <template x-for="chunk in sectionEvidence(currentDraft, section)" :key="chunk.id">
+                          <div class="evidence-card">
+                            <div class="evidence-title" x-text="evidenceLabel(chunk)"></div>
+                            <div class="evidence-text" x-text="chunk.text"></div>
                           </div>
-                          <p style="white-space:pre-wrap;line-height:1.55" x-text="section.content"></p>
-                          <details x-show="section.evidence_chunk_ids?.length">
-                            <summary class="text-sm text-muted">Evidence</summary>
-                            <div class="snippet mt-12" x-text="section.evidence_chunk_ids?.join(', ')"></div>
-                          </details>
-                          <div class="form-group mt-16" x-show="draftEditKey === draft.id + ':' + section.key">
-                            <textarea class="input w-full" rows="5" x-model="draftEditedContent"></textarea>
-                            <div class="flex gap-8 mt-12"><input class="input input-sm" placeholder="Reviewer name" x-model="draftReviewer"><button class="btn btn-primary btn-sm" @click="submitDraftEdit(draft, section)" :disabled="!draftReviewer.trim()">Submit edit</button><button class="btn btn-sm" @click="draftEditKey=''">Cancel</button></div>
-                          </div>
-                          <button class="btn btn-sm mt-12" x-show="draftEditKey !== draft.id + ':' + section.key" @click="startDraftEdit(draft, section)">Edit</button>
+                        </template>
+                      </div>
+                      <div class="form-group mt-16" x-show="draftEditKey === currentDraft.id + ':' + section.key">
+                        <textarea class="input w-full" rows="7" x-model="draftEditedContent"></textarea>
+                        <div class="flex gap-8 mt-12">
+                          <input class="input input-sm" placeholder="Reviewer name" x-model="draftReviewer">
+                          <button class="btn btn-primary btn-sm" @click="submitDraftEdit(currentDraft, section)" :disabled="!draftReviewer.trim()">Submit edit</button>
+                          <button class="btn btn-sm" @click="draftEditKey=''">Cancel</button>
                         </div>
-                      </template>
-                    </div>
+                      </div>
+                      <button class="btn btn-sm mt-12" x-show="draftEditKey !== currentDraft.id + ':' + section.key" @click="startDraftEdit(currentDraft, section)">Edit</button>
+                    </section>
                   </template>
                 </div>
               </template>
-              <div class="empty" x-show="!draftLoading && !drafts.length"><span class="text-muted">No drafts yet.</span></div>
+            </div>
+
+            <div x-show="detailTab==='extraction'">
+              <div class="grid-2" style="align-items:start">
+                <div class="card">
+                  <div class="card-title">Extracted fields</div>
+                  <template x-for="[k, v] in Object.entries(selResult?.fields || {})" :key="k">
+                    <div class="field-row"><span class="field-key" x-text="k.replace(/_/g,' ')"></span><span class="field-val mono" x-text="fmtField(v)"></span></div>
+                  </template>
+                </div>
+                <div class="card">
+                  <div class="card-title">Field confidence</div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <template x-for="fc in (selResult?.field_confidences || [])" :key="fc.name">
+                      <div>
+                        <div class="flex items-center gap-8 mb-12" style="margin-bottom:4px"><span class="text-sm" style="min-width:120px" x-text="fc.name.replace(/_/g,' ')"></span></div>
+                        <div class="conf-bar"><div class="conf-track"><div class="conf-fill" :style="'width:' + Math.round(fc.confidence*100) + '%;background:' + confColor(fc.confidence)"></div></div><span class="conf-label" :style="'color:' + confColor(fc.confidence)" x-text="fmtConf(fc.confidence)"></span></div>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div x-show="detailTab==='evidence'">
+              <div class="card">
+                <div class="card-title">Evidence for selected draft</div>
+                <div class="filter-bar" style="padding:0">
+                  <span class="text-sm text-muted" x-text="currentEvidence.length + ' chunk(s)'"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <template x-for="chunk in currentEvidence" :key="chunk.id">
+                    <div class="evidence-card">
+                      <div class="evidence-title" x-text="evidenceLabel(chunk)"></div>
+                      <div class="evidence-text" x-text="chunk.text"></div>
+                    </div>
+                  </template>
+                </div>
+              </div>
             </div>
           </div>
         </template>
       </div>
+
+      <div x-show="view==='preferences'">
+        <template x-if="analyticsLoading"><div class="empty"><div class="spinner"></div></div></template>
+        <template x-if="analyticsError"><div class="empty"><span class="badge badge-error" x-text="analyticsError"></span></div></template>
+        <template x-if="!analyticsLoading">
+          <div>
+            <div class="filter-bar">
+              <div class="card-title" style="margin:0">Learned Preferences</div>
+              <div class="spacer"></div>
+              <select class="input input-sm" x-model="preferenceFilter">
+                <option value="">All document types</option>
+                <option value="legal_complaint">legal_complaint</option>
+                <option value="contract">contract</option>
+                <option value="affidavit">affidavit</option>
+                <option value="legal_notice">legal_notice</option>
+                <option value="case_brief">case_brief</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px" x-show="filteredPreferences.length">
+              <template x-for="p in filteredPreferences" :key="p.id">
+                <div class="preference-card">
+                  <div class="preference-text" x-text="p.preference_text"></div>
+                  <div class="preference-meta">
+                    <span class="stat-pill mono" x-text="'Type: ' + p.document_type"></span>
+                    <span class="stat-pill" x-text="'Applied: ' + p.application_count + (p.application_count === 1 ? ' time' : ' times')"></span>
+                    <span class="stat-pill" x-text="'Confidence: ' + fmtConf(p.confidence)"></span>
+                  </div>
+                  <div class="score-row">
+                    <span class="text-sm text-muted">Effectiveness</span>
+                    <div class="score-track"><div class="score-fill" :style="'width:' + Math.round((p.effectiveness_score ?? 0) * 100) + '%'"></div></div>
+                    <span class="text-sm mono" x-text="p.effectiveness_score != null ? fmtConf(p.effectiveness_score) : '—'"></span>
+                  </div>
+                  <details class="mt-12" x-show="p.source_edit">
+                    <summary class="text-sm text-muted">Source edit</summary>
+                    <div class="snippet mt-12">
+                      <div class="mono" x-text="'Section: ' + (p.source_edit?.section_key || 'unknown')"></div>
+                      <div class="mt-8"><strong>Before:</strong></div>
+                      <div x-text="p.source_edit?.original_content || '—'"></div>
+                      <div class="mt-8"><strong>After:</strong></div>
+                      <div x-text="p.source_edit?.edited_content || '—'"></div>
+                    </div>
+                  </details>
+                  <button class="btn btn-sm btn-danger mt-12" @click="deletePreference(p.id)">Delete</button>
+                </div>
+              </template>
+            </div>
+            <div class="empty" x-show="!filteredPreferences.length"><span class="text-muted">No learned preferences yet.</span></div>
+          </div>
+        </template>
+      </div>
+
     </div>
   </div>
+
+  <div class="toast" x-show="toast" x-transition x-text="toast" style="display:none"></div>
 </div>
 </body>
 </html>

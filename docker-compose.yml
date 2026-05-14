@@ -63,6 +63,9 @@ services:
         --queues=documents.high,documents.normal
         --concurrency=4
         --hostname=worker-high@%h
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "celery", "-A", "app.workers.celery_app.celery_app", "inspect", "ping"]
 
   # ── Webhook worker ────────────────────────────────────────────────────────────
   worker-webhooks:
@@ -73,6 +76,9 @@ services:
         --queues=webhooks
         --concurrency=8
         --hostname=worker-webhooks@%h
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "celery", "-A", "app.workers.celery_app.celery_app", "inspect", "ping"]
 
   # ── Celery Flower (monitoring) ────────────────────────────────────────────────
   flower:
@@ -86,18 +92,6 @@ services:
     depends_on:
       - redis
       - worker
-
-  # ── Review UI ─────────────────────────────────────────────────────────────────
-  review-ui:
-    <<: *app
-    environment:
-      REVIEW_API_BASE: http://api:8000/api/v1
-    command: >
-      streamlit run review_ui/streamlit_app.py
-        --server.port 8501
-        --server.address 0.0.0.0
-    ports:
-      - "8501:8501"
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────────
   postgres:

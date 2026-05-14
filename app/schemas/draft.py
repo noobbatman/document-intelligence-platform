@@ -74,3 +74,4 @@ class DraftPreferenceRead(BaseModel):
     application_count: int
     effectiveness_score: float | None = None
     created_at: datetime
+    source_edit: dict[str, Any] | None = None

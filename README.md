@@ -106,7 +106,7 @@ For a detailed breakdown see [`docs/architecture.md`](docs/architecture.md).
 | Tool | Version | Purpose |
 |---|---|---|
 | [Docker Desktop](https://docs.docker.com/get-docker/) | 24+ | Full stack |
-| `GOOGLE_API_KEY` | — | Gemini 2.5 Flash (extraction + drafts) |
+| `GEMINI_API_KEY` | — | Gemini 2.5 Flash (extraction + drafts + preference learning) |
 
 ### Run
 
@@ -114,7 +114,8 @@ For a detailed breakdown see [`docs/architecture.md`](docs/architecture.md).
 git clone <repo-url>
 cd improved
 cp .env.example .env
-# Add your GOOGLE_API_KEY to .env
+# Set GEMINI_API_KEY=<your-key> in .env
+# Get a key at https://aistudio.google.com/app/apikey
 docker compose up --build -d
 docker compose exec api alembic upgrade head
 ```
@@ -126,7 +127,7 @@ The API is available at `http://localhost:8000`. Swagger UI at `http://localhost
 ```bash
 # Upload (returns document ID immediately; processing runs async)
 curl -X POST http://localhost:8000/api/v1/documents/upload \
-  -F "file=@sample_docs/sample_legal_complaint.pdf"
+  -F "file=@sample_docs/sample_legal_complaint.txt"
 
 # Poll until status = completed
 curl http://localhost:8000/api/v1/documents/{id}/status
@@ -293,17 +294,19 @@ PDF_RENDER_ZOOM=3.0
 
 | Variable | Default | Description |
 |---|---|---|
-| `GOOGLE_API_KEY` | required | Gemini API key (extraction + drafts + preference extraction) |
+| `GEMINI_API_KEY` | **required** | Gemini API key (extraction + drafts + preference learning) |
 | `DATABASE_URL` | `postgresql+psycopg://...` | PostgreSQL connection |
 | `CELERY_BROKER_URL` | `redis://redis:6379/0` | Redis broker |
-| `OCR_ENGINE` | `auto` | OCR engine mode |
+| `OCR_ENGINE` | `tesseract` | OCR engine (`tesseract` \| `paddle` \| `trocr`) |
 | `OCR_PREPROCESS` | `true` | Enable image preprocessing pipeline |
 | `HANDWRITING_CONFIDENCE_THRESHOLD` | `0.70` | Auto-route to TrOCR below this confidence |
 | `PDF_RENDER_ZOOM` | `3.0` | DPI multiplier for PDF page rendering |
+| `EMBEDDING_MODEL` | `BAAI/bge-base-en-v1.5` | Sentence embedding model for retrieval |
+| `RETRIEVAL_TOP_K` | `8` | Chunks retrieved per draft section |
 | `DRAFT_MODEL` | `gemini-2.5-flash` | Gemini model for draft generation |
-| `DRAFT_MAX_CHUNKS` | `20` | Max retrieved chunks per draft |
+| `DRAFT_MAX_CHUNKS` | `10` | Max retrieved chunks per draft |
 | `PREFERENCE_MAX_PER_DRAFT` | `5` | Max learned preferences injected per draft |
-| `PREFERENCE_DEDUP_THRESHOLD` | `0.92` | Cosine similarity threshold for deduplication |
+| `PREFERENCE_DEDUP_THRESHOLD` | `0.85` | Cosine similarity threshold for deduplication |
 
 Full configuration: `.env.example`.
 

@@ -23,3 +23,7 @@ aws/rendered/
 .claude/
 
 *.egg-info/
+
+# Personal / local files that should never be committed
+*.pdf
+!sample_docs/*.pdf

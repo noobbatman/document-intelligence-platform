@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml README.md ./
 COPY app ./app
-COPY review_ui ./review_ui
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --prefix=/install .
 
@@ -40,7 +39,6 @@ COPY --from=builder /install /usr/local
 
 # Application source
 COPY app ./app
-COPY review_ui ./review_ui
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 COPY scripts ./scripts
@@ -52,9 +50,6 @@ RUN mkdir -p /app/data/uploads /app/data/exports && \
     chown -R appuser:appgroup /app/data
 
 USER appuser
-
-HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-  CMD curl -sf http://localhost:8000/api/v1/health/live || exit 1
 
 EXPOSE 8000
 

@@ -166,12 +166,40 @@ tests/
 ### Document APIs
 
 - `POST /api/v1/documents/upload`
+- `POST /api/v1/documents/upload/batch`
 - `GET /api/v1/documents`
+- `GET /api/v1/documents/search`
 - `GET /api/v1/documents/{document_id}`
+- `DELETE /api/v1/documents/{document_id}`
 - `GET /api/v1/documents/{document_id}/result`
 - `GET /api/v1/documents/{document_id}/history`
 - `POST /api/v1/documents/{document_id}/reprocess`
 - `GET /api/v1/documents/{document_id}/export`
+
+### Draft / RAG APIs
+
+- `POST /api/v1/documents/{id}/drafts`
+- `GET /api/v1/documents/{id}/drafts`
+- `GET /api/v1/documents/{id}/drafts/{draft_id}`
+- `PUT /api/v1/documents/{id}/drafts/{draft_id}`
+- `GET /api/v1/documents/{id}/drafts/{draft_id}/evidence`
+
+### Preference APIs
+
+- `GET /api/v1/preferences`
+- `DELETE /api/v1/preferences/{id}`
+
+### Review APIs
+
+- `GET /api/v1/reviews/pending`
+- `POST /api/v1/reviews/{task_id}/decision`
+
+### Analytics APIs
+
+- `GET /api/v1/analytics/metrics/overview`
+- `GET /api/v1/analytics/metrics/ocr-distribution`
+- `GET /api/v1/analytics/corrections/stats`
+- `GET /api/v1/analytics/draft-improvement`
 
 ### Platform APIs
 
@@ -230,13 +258,3 @@ This is a real feedback loop rather than a version diff: future generations use
 the learned preference text and few-shot edit examples, and every draft records
 which preference IDs were applied.
 
-## 10. RAG API Surface
-
-- `POST /api/v1/documents/{id}/drafts`
-- `GET /api/v1/documents/{id}/drafts`
-- `GET /api/v1/documents/{id}/drafts/{draft_id}`
-- `PUT /api/v1/documents/{id}/drafts/{draft_id}`
-- `GET /api/v1/documents/{id}/drafts/{draft_id}/evidence`
-- `GET /api/v1/preferences`
-- `DELETE /api/v1/preferences/{id}`
-- `GET /api/v1/analytics/draft-improvement`
