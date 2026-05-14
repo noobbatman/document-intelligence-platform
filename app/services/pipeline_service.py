@@ -143,7 +143,6 @@ class PipelineService:
                     "correlation_id": correlation_id,
                 },
             )
-
             try:
                 from app.workers.tasks import embed_document_task
 

@@ -29,10 +29,8 @@ from app.schemas.document import (
     DocumentUploadResponse,
     ReprocessResponse,
 )
-from app.schemas.rag import DocumentAskRequest, RAGQueryResponse
 from app.services.audit_service import AuditService
 from app.services.document_service import DocumentService
-from app.services.rag_service import RAGService
 from app.workers.tasks import process_document_high_priority, process_document_task
 
 # router-level auth: all endpoints require a valid API key (no-op when API_KEYS is empty)
@@ -210,27 +208,6 @@ def reprocess_document(
     task_fn = process_document_high_priority if priority else process_document_task
     task = task_fn.delay(doc.id, request_id=getattr(request.state, "request_id", None))
     return ReprocessResponse(document_id=doc.id, task_id=str(task.id), status=doc.status)
-
-
-@router.post("/{document_id}/ask", response_model=RAGQueryResponse)
-def ask_document(
-    document_id: str,
-    payload: DocumentAskRequest,
-    db: Session = Depends(db_dependency),
-    tenant_id: str | None = Depends(get_optional_tenant),
-) -> RAGQueryResponse:
-    if not get_settings().rag_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="RAG is not enabled. Set RAG_ENABLED=true.",
-        )
-
-    DocumentService(db).get_document(document_id, tenant_id=tenant_id)
-    return RAGService(db).query(
-        payload.question,
-        tenant_id=tenant_id,
-        document_ids=[document_id],
-    )
 
 
 @router.get("/{document_id}/export")
