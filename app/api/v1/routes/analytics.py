@@ -109,7 +109,10 @@ def correction_stats(db: Session = DB_DEP, tenant_id: str | None = TENANT_DEP) -
             tenant_id,
         )
     ).all()
-    return {"by_field": {field: count for field, count in rows}, "total": sum(count for _, count in rows)}
+    return {
+        "by_field": {field: count for field, count in rows},
+        "total": sum(count for _, count in rows),
+    }
 
 
 @router.get("/draft-improvement")
@@ -122,8 +125,12 @@ def draft_improvement(db: Session = DB_DEP, tenant_id: str | None = TENANT_DEP) 
         edit_stmt = edit_stmt.where(DraftEdit.tenant_id.is_(None), Document.tenant_id.is_(None))
         pref_stmt = pref_stmt.where(DraftPreference.tenant_id.is_(None))
     else:
-        draft_stmt = draft_stmt.where(DraftOutput.tenant_id == tenant_id, Document.tenant_id == tenant_id)
-        edit_stmt = edit_stmt.where(DraftEdit.tenant_id == tenant_id, Document.tenant_id == tenant_id)
+        draft_stmt = draft_stmt.where(
+            DraftOutput.tenant_id == tenant_id, Document.tenant_id == tenant_id
+        )
+        edit_stmt = edit_stmt.where(
+            DraftEdit.tenant_id == tenant_id, Document.tenant_id == tenant_id
+        )
         pref_stmt = pref_stmt.where(DraftPreference.tenant_id == tenant_id)
 
     drafts = list(db.scalars(draft_stmt))
@@ -138,7 +145,9 @@ def draft_improvement(db: Session = DB_DEP, tenant_id: str | None = TENANT_DEP) 
     periods = sorted(set(drafts_by_day) | set(edited_by_day))
     top_preferences = list(
         db.scalars(
-            pref_stmt.order_by(DraftPreference.application_count.desc(), DraftPreference.confidence.desc()).limit(10)
+            pref_stmt.order_by(
+                DraftPreference.application_count.desc(), DraftPreference.confidence.desc()
+            ).limit(10)
         )
     )
     most_edited = Counter(edit.section_key for edit in edits)
