@@ -173,6 +173,55 @@ def test_bge_prefixes_are_query_only(monkeypatch):
     assert captured[1] == ["Represent this sentence for searching relevant passages: governing law"]
 
 
+def test_query_expansion_is_cached_and_concatenated(monkeypatch):
+    service = RetrievalService()
+    service.settings.query_expansion_enabled = True
+    service.settings.gemini_api_key = "test-key"
+    calls = []
+
+    def fake_generate_json(**kwargs):
+        calls.append(kwargs)
+        return {"expanded_query": "unauthorized disclosure financial records bank records"}
+
+    monkeypatch.setattr(service.gemini, "generate_json", fake_generate_json)
+
+    first = service._expand_query("wrongful account access")
+    second = service._expand_query("wrongful account access")
+
+    assert first == (
+        "wrongful account access unauthorized disclosure financial records bank records"
+    )
+    assert second == first
+    assert len(calls) == 1
+    assert calls[0]["model_id"] == service.settings.query_expansion_model
+
+
+def test_query_expansion_fails_open(monkeypatch):
+    service = RetrievalService()
+    service.settings.query_expansion_enabled = True
+    service.settings.gemini_api_key = "test-key"
+
+    def fail_generate_json(**kwargs):
+        raise RuntimeError("rate limited")
+
+    monkeypatch.setattr(service.gemini, "generate_json", fail_generate_json)
+
+    assert service._expand_query("venue facts") == "venue facts"
+
+
+def test_query_expansion_disabled_without_key(monkeypatch):
+    service = RetrievalService()
+    service.settings.query_expansion_enabled = True
+    service.settings.gemini_api_key = ""
+
+    def fail_if_called(**kwargs):
+        raise AssertionError("Gemini should not be called without a key")
+
+    monkeypatch.setattr(service.gemini, "generate_json", fail_if_called)
+
+    assert service._expand_query("governing law") == "governing law"
+
+
 def test_chunker_ignores_common_legal_abbreviations_for_sentence_boundary():
     text = "Pearson Specter Litt, Inc. entered the agreement. The payment terms follow."
     chunker = SectionAwareChunker(chunk_size_chars=120, chunk_overlap_chars=10)

@@ -104,6 +104,11 @@ class Settings(BaseSettings):
     section_detection_enabled: bool = Field(default=True, alias="SECTION_DETECTION_ENABLED")
     retrieval_top_k: int = Field(default=8, alias="RETRIEVAL_TOP_K")
     retrieval_min_score: float = Field(default=0.35, alias="RETRIEVAL_MIN_SCORE")
+    query_expansion_enabled: bool = Field(default=True, alias="QUERY_EXPANSION_ENABLED")
+    query_expansion_model: str = Field(
+        default="gemini-2.0-flash-lite", alias="QUERY_EXPANSION_MODEL"
+    )
+    query_expansion_max_tokens: int = Field(default=256, alias="QUERY_EXPANSION_MAX_TOKENS")
 
     # ── Drafting / Preference Learning ────────────────────────────────────────
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")

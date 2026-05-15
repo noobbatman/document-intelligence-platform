@@ -233,9 +233,15 @@ pipeline:
 
 1. OCR text is chunked with section-aware boundaries.
 2. Chunks are embedded locally with `BAAI/bge-base-en-v1.5`.
-3. pgvector stores embeddings in `document_chunks`.
-4. Draft-specific retrieval queries gather evidence chunks.
-5. Gemini 2.5 Flash generates structured draft sections with inline page
+3. Short-form defined terms are annotated before embedding so references like
+   `LCU` still retrieve chunks about `Landmark Credit Union`.
+4. pgvector stores embeddings in `document_chunks`.
+5. Draft-specific retrieval queries gather evidence chunks.
+6. Query expansion can use Gemini Flash Lite to add legal synonyms before BGE
+   embedding. The expanded query is cached per retrieval service instance and
+   falls back to the original query on missing keys, rate limits, or parsing
+   failures.
+7. Gemini 2.5 Flash generates structured draft sections with inline page
    citations and evidence chunk IDs.
 
 Drafts are stored in `draft_outputs`, with statuses for `generating`, `draft`,

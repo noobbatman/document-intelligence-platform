@@ -64,6 +64,9 @@ class QueryExpander:
                     'Return JSON only: {"expanded_query": "..."}.'
                 ),
                 user_prompt=f"Original query: {query}",
+                model_id=self._client.settings.query_expansion_model,
+                max_output_tokens=self._client.settings.query_expansion_max_tokens,
+                temperature=0,
             )
             expanded = str(payload.get("expanded_query") or "").strip()
             return f"{query} {expanded}" if expanded else query

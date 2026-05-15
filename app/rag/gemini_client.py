@@ -13,7 +13,15 @@ class GeminiClient:
     def __init__(self) -> None:
         self.settings = get_settings()
 
-    def generate_json(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    def generate_json(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        model_id: str | None = None,
+        max_output_tokens: int | None = None,
+        temperature: float = 0.2,
+    ) -> dict[str, Any]:
         if not self.settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not set.")
 
@@ -26,12 +34,12 @@ class GeminiClient:
         client = genai.Client(api_key=self.settings.gemini_api_key)
         config = types.GenerateContentConfig(
             system_instruction=system_prompt,
-            max_output_tokens=self.settings.draft_max_tokens,
-            temperature=0.2,
+            max_output_tokens=max_output_tokens or self.settings.draft_max_tokens,
+            temperature=temperature,
             response_mime_type="application/json",
         )
         response = client.models.generate_content(
-            model=self.settings.draft_model,
+            model=model_id or self.settings.draft_model,
             contents=user_prompt,
             config=config,
         )
@@ -49,12 +57,12 @@ class GeminiClient:
             )
             retry_config = types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                max_output_tokens=self.settings.draft_max_tokens,
+                max_output_tokens=max_output_tokens or self.settings.draft_max_tokens,
                 temperature=0,
                 response_mime_type="application/json",
             )
             retry = client.models.generate_content(
-                model=self.settings.draft_model,
+                model=model_id or self.settings.draft_model,
                 contents=retry_prompt,
                 config=retry_config,
             )

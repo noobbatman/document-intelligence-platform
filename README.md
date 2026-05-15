@@ -315,6 +315,8 @@ PDF_RENDER_ZOOM=3.0
 | `PDF_RENDER_ZOOM` | `3.0` | DPI multiplier for PDF page rendering |
 | `EMBEDDING_MODEL` | `BAAI/bge-base-en-v1.5` | Sentence embedding model for retrieval |
 | `RETRIEVAL_TOP_K` | `8` | Chunks retrieved per draft section |
+| `QUERY_EXPANSION_ENABLED` | `true` | Expand legal retrieval queries with Gemini synonyms before BGE embedding |
+| `QUERY_EXPANSION_MODEL` | `gemini-2.0-flash-lite` | Low-cost model used only for query expansion |
 | `DRAFT_MODEL` | `gemini-2.5-flash` | Gemini model for draft generation |
 | `DRAFT_MAX_CHUNKS` | `10` | Max retrieved chunks per draft |
 | `PREFERENCE_MAX_PER_DRAFT` | `5` | Max learned preferences injected per draft |
@@ -403,6 +405,9 @@ Deterministic regex is fast, free, and fully auditable. The LLM fill only runs f
 
 **Why per-section retrieval queries?**
 A single query for "internal memo" returns chunks biased toward whatever words appear most in the document. Running one targeted query per section (e.g. "jurisdiction venue 28 U.S.C. 1331" for the jurisdiction section) produces much more relevant context for each part of the draft.
+
+**Why query expansion before retrieval?**
+Legal passages often use different words for the same concept: a template query may say "wrongful account access" while the source says "unauthorized disclosure of financial records." When enabled, the retrieval service asks Gemini Flash Lite for 6-10 synonymous legal terms, concatenates them with the original query, caches the result, and embeds that expanded text with BGE. If Gemini is unavailable, retrieval silently uses the original query.
 
 **Why scale preference penalties by edit coverage?**
 With a flat binary penalty, editing one typo in a six-section memo would penalise a good jurisdiction preference as much as a fully rewritten draft. Section-proportional scoring lets good rules survive minor editorial corrections.
