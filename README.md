@@ -23,9 +23,17 @@
 
 2. **Structured Extraction** — classifies the document type, then runs a schema-driven extractor: regex pre-pass for high-signal fields, Gemini fill for gaps, with every extracted value linked back to a source text snippet.
 
-3. **Grounded Draft Generation** — retrieves relevant passages from the document using BGE embeddings + pgvector and generates a structured legal-style draft (internal memo, case fact summary, affidavit summary, etc.) with mandatory `[Page N]` inline citations and `[UNSUPPORTED: reason]` markers for anything not present in the source.
+3. **Defined-Term Resolution** — scans extracted text for `"Term" means …` patterns, builds a canonical term → definition map, annotates chunks with labels (e.g. `Company [Acme Corp]`) before BGE embedding so retrieval stays semantically accurate, and injects a `DEFINED TERMS` block into every draft prompt so the model uses consistent terminology throughout.
 
-4. **Improvement Loop** — operator edits to generated drafts are captured, distilled into reusable preference rules by Gemini, stored per tenant/document-type, and automatically injected into all future drafts. Preference effectiveness is tracked and decays when rules stop helping.
+4. **Jurisdiction-Aware Retrieval** — tags every chunk with a jurisdiction label (e.g. `federal`, `state:NY`, `federal:EDNY`) detected from the text; at query time, chunks whose jurisdiction conflicts with the query's detected jurisdiction are excluded from the candidate set, while untagged and matching chunks are always included.
+
+5. **Intra-Document Conflict Detection** — deterministically detects four classes of contradiction across chunks: conflicting governing-law clauses, duplicate defined-term definitions with different meanings, inconsistent dates for the same label, and mismatched monetary amounts. Conflicts are cached in the export payload after embedding, surfaced via a dedicated REST endpoint, shown as a severity-labelled warning banner in the UI, and injected into draft prompts so the model acknowledges discrepancies rather than asserting either value as authoritative.
+
+6. **Query Expansion** — before BGE embedding, the retrieval service asks Gemini Flash Lite for 6–10 synonymous legal terms for each section query (e.g. "wrongful account access" → "unauthorized disclosure of financial records, improper access to nonpublic information …"), concatenates them with the original query, and caches the result per document. Falls back silently to the original query if Gemini is unavailable.
+
+7. **Grounded Draft Generation** — retrieves relevant passages from the document using expanded BGE queries + pgvector and generates a structured legal-style draft (internal memo, case fact summary, affidavit summary, etc.) with mandatory `[Page N]` inline citations and `[UNSUPPORTED: reason]` markers for anything not present in the source.
+
+8. **Improvement Loop** — operator edits to generated drafts are captured, distilled into reusable preference rules by Gemini, stored per tenant/document-type, and automatically injected into all future drafts. Preference effectiveness is tracked and decays when rules stop helping.
 
 ---
 
@@ -63,25 +71,39 @@ PDF / Image
 │  → Gemini fill for missing fields        │
 │  → ExtractionOutput: typed fields +      │
 │    source snippets + entity list         │
+│  → Defined-Term Resolution:              │
+│    "Term" means … → canonical map        │
 └─────────────────┬────────────────────────┘
                   │
                   ▼
 ┌──────────────────────────────────────────┐
 │ Chunking + Embedding (async)             │
 │  Overlapping text chunks                 │
+│  → Defined-term annotation on chunks     │
+│    (Company → Company [Acme Corp])       │
+│  → Jurisdiction tagging per chunk        │
+│    (federal · state:NY · federal:EDNY …) │
 │  → BGE embeddings → pgvector IVFFlat     │
+│  → Conflict detection cached in          │
+│    export_payload (governing_law /       │
+│    defined_term / date / amount)         │
 └─────────────────┬────────────────────────┘
                   │
                   ▼
 ┌──────────────────────────────────────────┐
 │ Draft Generation                         │
-│  Per-section BGE retrieval (one query    │
-│  per template section) + keyword support │
+│  Per-section query expansion (Gemini     │
+│  Flash Lite → synonymous legal terms)    │
+│  → Jurisdiction-filtered BGE retrieval   │
+│    (one query per template section)      │
 │  → Gemini with strict grounding rules:   │
+│    · DEFINED TERMS block injected        │
+│    · KNOWN CONFLICTS block injected      │
 │    · cite every fact as [Page N]         │
 │    · write [UNSUPPORTED: reason] for     │
 │      anything not in the source          │
 │  → structured sections + evidence_ids   │
+│  → grounding_score per section           │
 └─────────────────┬────────────────────────┘
                   │ operator reviews, edits sections
                   ▼
@@ -135,6 +157,9 @@ curl http://localhost:8000/api/v1/documents/{id}/status
 # View structured extraction result
 curl http://localhost:8000/api/v1/documents/{id}/result
 
+# View intra-document conflicts detected during embedding
+curl http://localhost:8000/api/v1/documents/{id}/conflicts
+
 # Generate an internal memo draft
 curl -X POST http://localhost:8000/api/v1/documents/{id}/drafts \
   -H "Content-Type: application/json" \
@@ -160,6 +185,14 @@ The `sample_docs/` directory contains synthetic legal documents and the expected
 ### Output — structured extraction
 
 [`sample_docs/sample_extraction_output.json`](sample_docs/sample_extraction_output.json) — the `ExtractionOutput` the pipeline produces for the above complaint: typed fields (case number, court, plaintiffs, defendants, claims, statutes, relief sought), entity list, and per-field source snippets linking each value back to the original text.
+
+### Output — defined terms
+
+[`sample_docs/sample_defined_terms.json`](sample_docs/sample_defined_terms.json) — the canonical defined-term map extracted from a contract document, showing how `"Confidential Information"`, `"Company"`, and other terms are resolved to their authoritative definitions and how they appear annotated in the chunk text.
+
+### Output — conflict report
+
+[`sample_docs/sample_conflicts.json`](sample_docs/sample_conflicts.json) — an example `ConflictReport` for a contract with three detected contradictions: a governing-law conflict (New York vs. Delaware), a defined-term redefinition (Confidential Information), and a monthly-fee mismatch ($5,000 vs. $5,500).
 
 ### Output — grounded draft
 
@@ -187,6 +220,79 @@ The `sample_docs/` directory contains synthetic legal documents and the expected
 | `legal_notice` | Formal legal notice documents |
 | `affidavit` | Full affidavit analysis |
 | `document_checklist` | Completeness audit against required fields |
+
+---
+
+## Defined-term resolution
+
+Legal documents define their own vocabulary. A clause that says `"Company" means Acme Corp` in Section 1 but then refers to "the Company's obligations" in Section 12 presents a retrieval problem: the embedding of "Company" and the embedding of "Acme Corp" are different vectors.
+
+The defined-term resolver (`app/extraction/defined_terms.py`) runs after schema extraction and before chunking:
+
+1. **Extraction** — scans the full document text for `"Term" means …`, `"Term" shall mean …`, `"Term" refers to …`, and `"Term" is defined as …` patterns (up to 180 characters). Optionally confirmed by Gemini when a definition is ambiguous.
+2. **Annotation** — before BGE embedding, every chunk text is annotated in-place: occurrences of each defined term become `Term [Canonical Definition]`, e.g. `the Company [Acme Corp] shall deliver…`. This ensures the embedding captures both the shorthand and the actual entity.
+3. **Prompt injection** — every draft generation call receives a `DEFINED TERMS` block at the top of the user prompt:
+
+```
+DEFINED TERMS (extracted from this document):
+Use these canonical definitions consistently throughout the draft.
+  · "Confidential Information" → any non-public information disclosed by either party
+  · "Company" → Acme Corp
+  · "Effective Date" → January 1, 2024
+```
+
+The term map is stored in `export_payload["defined_terms"]` alongside the conflict list, so it is available without re-parsing for every subsequent draft or API call.
+
+---
+
+## Jurisdiction-aware retrieval
+
+Jurisdiction tags (`app/rag/jurisdiction.py`) are assigned to every chunk during the embedding step by scanning the chunk text for jurisdiction signals:
+
+| Signal | Tag assigned |
+|---|---|
+| "United States District Court", "federal law", "28 U.S.C." | `federal` |
+| "Eastern District of Wisconsin", "E.D. Wis." | `federal:EDWI` |
+| "State of New York", "N.Y. C.P.L.R.", "New York law" | `state:NY` |
+| "California Civil Code", "State of California" | `state:CA` |
+| _(no jurisdiction signal)_ | `None` (untagged) |
+
+At retrieval time, the service detects a jurisdiction in the incoming query (same patterns). Chunks are then filtered:
+
+- **Matching jurisdiction** — always included
+- **No tag** — always included (neutral chunks are useful everywhere)
+- **Conflicting jurisdiction** — excluded from the candidate set
+
+This prevents a query about New York law from returning chunks that discuss Delaware-specific statutes. Jurisdiction tags are stored on the `DocumentChunk` model with a composite index on `(document_id, jurisdiction)` for efficient filtering.
+
+---
+
+## Intra-document conflict detection
+
+The conflict detector (`app/rag/conflict_detector.py`) runs automatically at the end of the embedding step, scanning all chunks deterministically. Four conflict types are detected:
+
+| Type | Severity | What it catches |
+|---|---|---|
+| `governing_law` | high | Two or more distinct jurisdiction names appear in "governed by" / "construed under" phrases |
+| `defined_term` | medium | The same quoted term is given different definitions in different sections |
+| `date` | medium | A date label (Effective Date, Execution Date, …) appears with two different dates |
+| `amount` | high | A monetary label (monthly fee, purchase price, …) appears with two different dollar figures |
+
+Conflicts are:
+
+- **Cached** in `export_payload["conflicts"]` immediately after embedding — no re-computation on subsequent reads
+- **Served** via `GET /documents/{id}/conflicts` → `ConflictReport` (JSON with `conflict_count`, `has_high_severity`, per-item chunk indices)
+- **Displayed** in the UI as a severity-labelled banner above the extraction grid (high = red, medium = yellow)
+- **Injected** into every draft prompt as a `KNOWN CONFLICTS` block, instructing the model to acknowledge the discrepancy rather than asserting either fact
+
+```
+KNOWN CONFLICTS IN THIS DOCUMENT:
+  [HIGH] GOVERNING_LAW: Conflicting governing law references: "new york", "delaware".
+  [HIGH] AMOUNT: Inconsistent "monthly fee": $5000 vs. $5500.
+  [MEDIUM] DEFINED_TERM: "confidential information" has conflicting definitions across sections.
+```
+
+Documents embedded before conflict detection was deployed are computed on-the-fly from stored chunks when the endpoint is called.
 
 ---
 
@@ -317,6 +423,7 @@ PDF_RENDER_ZOOM=3.0
 | `RETRIEVAL_TOP_K` | `8` | Chunks retrieved per draft section |
 | `QUERY_EXPANSION_ENABLED` | `true` | Expand legal retrieval queries with Gemini synonyms before BGE embedding |
 | `QUERY_EXPANSION_MODEL` | `gemini-2.0-flash-lite` | Low-cost model used only for query expansion |
+| `QUERY_EXPANSION_MAX_TOKENS` | `256` | Max output tokens for query expansion calls |
 | `DRAFT_MODEL` | `gemini-2.5-flash` | Gemini model for draft generation |
 | `DRAFT_MAX_CHUNKS` | `10` | Max retrieved chunks per draft |
 | `PREFERENCE_MAX_PER_DRAFT` | `5` | Max learned preferences injected per draft |
@@ -359,7 +466,7 @@ For a full 500-query run with query expansion (requires `GEMINI_API_KEY`):
 pytest -v --tb=short
 ```
 
-Tests cover API routes, OCR pipeline, schema extraction, retrieval, draft generation, and the preference learning loop.
+Tests cover API routes, OCR pipeline, schema extraction, retrieval, draft generation, conflict detection, and the preference learning loop.
 
 ---
 
@@ -367,13 +474,20 @@ Tests cover API routes, OCR pipeline, schema extraction, retrieval, draft genera
 
 ```
 app/
-  api/v1/routes/        — FastAPI route handlers
+  api/v1/routes/
+    conflicts.py        — GET /documents/{id}/conflicts
+    documents.py        — upload, status, result
+    drafts.py           — generate, edit, evidence
+    analytics.py        — usage analytics
+    reviews.py          — operator review submission
+    health.py           — liveness / readiness probes
   classification/       — TF-IDF + keyword document classifier
   core/                 — config, logging, metrics
   db/                   — SQLAlchemy models (Document, DocumentChunk,
   |                       DraftOutput, DraftEdit, DraftPreference …)
   extraction/
     schemas/            — per-document-type YAML extraction schemas
+    defined_terms.py    — "Term" means … extractor + chunk annotator
     schema_extractor.py — regex pre-pass + Gemini fill
   ocr/
     preprocessing.py    — deskew · denoise · CLAHE · binarize
@@ -383,17 +497,41 @@ app/
     auto_ocr.py         — confidence-based auto-routing
     factory.py          — engine selection
   rag/
-    draft_service.py    — retrieval + draft generation + edit capture
-    draft_templates/    — per-draft-type YAML section plans
+    conflict_detector.py  — deterministic 4-type intra-document conflict detection
+    draft_service.py      — retrieval + draft generation + edit capture
+    draft_templates/      — per-draft-type YAML section plans
+    embedding_service.py  — chunk + embed + tag + detect conflicts
+    grounding_scorer.py   — deterministic sentence-level grounding metric
+    jurisdiction.py       — chunk jurisdiction tagging + retrieval filter
     preference_service.py — preference extraction + scoring
-    retrieval_service.py  — BGE + pgvector search
-    gemini_client.py    — Gemini wrapper with JSON parse + retry
+    retrieval_service.py  — BGE + query expansion + pgvector search
+    gemini_client.py      — Gemini wrapper with JSON parse + retry
+  schemas/
+    conflict.py         — ConflictItemRead, ConflictReport Pydantic models
+    document.py         — document upload / status schemas
+    draft.py            — draft request / response schemas
   utils/
     pdf.py              — PyMuPDF rendering
+alembic/                — database migration scripts
+evaluation/
+  retrieval/
+    corpus_loader.py    — selective corpus loading (--corpus-scope referenced)
+    run_legalbench_rag.py — LegalBench-RAG evaluator
+  results/
+    legalbench_rag_mini_results.json — 25-query real benchmark results
 docs/
   architecture.md       — detailed architecture notes
 sample_docs/            — synthetic sample documents and example outputs
+  sample_legal_complaint.txt
+  sample_extraction_output.json
+  sample_defined_terms.json
+  sample_conflicts.json
+  sample_draft_output.json
+  sample_improvement_loop.json
 tests/
+  test_conflict_detector.py
+  test_legalbench_eval.py
+  … (API routes, OCR, schema extraction, retrieval, drafts, preferences)
 ```
 
 ---
@@ -403,11 +541,20 @@ tests/
 **Why regex pre-pass before LLM extraction?**
 Deterministic regex is fast, free, and fully auditable. The LLM fill only runs for fields the regex couldn't find — this keeps costs low and avoids hallucination on fields that regex handles reliably (case numbers, dates, statute citations).
 
+**Why annotate chunks with defined-term labels before embedding?**
+"Company" and "Acme Corp" have different vector representations. Without annotation, a query mentioning "Acme Corp" may not retrieve chunks that only use the shorthand "the Company". Injecting `Company [Acme Corp]` into the chunk text before embedding bridges this gap deterministically, without requiring a separate lookup at query time.
+
 **Why per-section retrieval queries?**
 A single query for "internal memo" returns chunks biased toward whatever words appear most in the document. Running one targeted query per section (e.g. "jurisdiction venue 28 U.S.C. 1331" for the jurisdiction section) produces much more relevant context for each part of the draft.
 
 **Why query expansion before retrieval?**
 Legal passages often use different words for the same concept: a template query may say "wrongful account access" while the source says "unauthorized disclosure of financial records." When enabled, the retrieval service asks Gemini Flash Lite for 6-10 synonymous legal terms, concatenates them with the original query, caches the result, and embeds that expanded text with BGE. If Gemini is unavailable, retrieval silently uses the original query.
+
+**Why jurisdiction-filter at retrieval time rather than tagging the query?**
+Tagging the query and doing a hard filter would silently drop chunks when the detector misclassifies a query's jurisdiction. The soft approach — include untagged chunks, exclude only confirmed conflicts — means retrieval degrades gracefully: worst case the model sees a slightly less targeted context window, not an empty one.
+
+**Why detect conflicts deterministically rather than with LLM?**
+An LLM-based conflict detector would require sending the full document to Gemini on every embedding run. The deterministic regex approach runs in milliseconds, produces structured output (chunk indices, severity, field), has no API cost, and is fully unit-testable. The tradeoff is that it only catches the four most common legal contradictions; semantic inconsistencies beyond those patterns are not detected.
 
 **Why scale preference penalties by edit coverage?**
 With a flat binary penalty, editing one typo in a six-section memo would penalise a good jurisdiction preference as much as a fully rewritten draft. Section-proportional scoring lets good rules survive minor editorial corrections.
