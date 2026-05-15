@@ -414,3 +414,77 @@ With a flat binary penalty, editing one typo in a six-section memo would penalis
 
 **Why TrOCR only as a fallback?**
 TrOCR loads a 350MB transformer model and processes one line crop at a time — it is 10–30× slower than Tesseract. Routing to it only on low-confidence pages keeps the happy path fast while still handling genuinely degraded or handwritten input.
+
+---
+
+## Known limitations
+
+These are honest gaps in the current implementation — things that work by design but would need more work before production use at scale.
+
+**OCR on real messy documents** — The preprocessing pipeline (deskew, denoise, CLAHE) and TrOCR fallback are implemented and tested in isolation, but the `sample_docs/` directory contains clean synthetic text files rather than genuinely scanned PDFs. The pipeline has never been validated end-to-end on a real degraded scan. PaddleOCR and TrOCR are also behind optional extras (`pip install ".[paddle]"` / `".[ml]"`) because they require large model downloads that are impractical in CI.
+
+**LegalBench-RAG benchmark scope** — The committed benchmark result covers 25 queries (`--limit 25`, `--corpus-scope referenced`). The full 500-query mini run and full-corpus run have not been completed because they require the 79M-character dataset and several hours of embedding time. The 25-query numbers (Recall@5 = 0.72, Recall@10 = 0.84, MRR = 0.43) are real BGE results on real legal text, but a larger sample would give more confidence in the figures.
+
+**Query expansion requires Gemini quota** — `QUERY_EXPANSION_ENABLED=true` by default, but the comparison between baseline and expanded retrieval in the evaluator is only meaningful when `GEMINI_API_KEY` is set. Without it, both runs are identical. The code falls back silently so nothing breaks, but the Recall@10 uplift (+8–12% per Stanford RegLab) cannot be demonstrated without a live key.
+
+**Conflict detection is intra-document only** — The current detector finds contradictions within a single document's chunks. Cross-document conflict detection (e.g., a contract and its amendment disagreeing on a payment term) is architecturally straightforward to add but not yet implemented.
+
+**Preference learning quality is Gemini-dependent** — The improvement loop captures edits and distills rules correctly, but the quality of the extracted preference text depends on Gemini 2.5 Flash's ability to generalise from a diff to a reusable rule. Bad distillation produces vague rules that don't help. There is no human review step before a preference is persisted.
+
+**No authentication layer** — API key auth (`API_KEYS` env var) and tenant isolation are wired through every route, but there is no user login, JWT, or OAuth flow. This is a single-tenant dev setup, not a multi-tenant SaaS deployment.
+
+**Table extraction returns empty** — `extracted.tables` is always `[]` in the current pipeline. The field exists in the schema and export payload but the extractor never populates it. Structured table data (e.g., payment schedules, asset lists) would improve retrieval quality for contract-heavy documents.
+
+---
+
+## Future work
+
+The six priorities implemented for this assessment (grounding score, LegalBench-RAG evaluator, defined-term resolution, query expansion, jurisdiction tagging, conflict detection) are the foundation. The next meaningful improvements are listed below in rough priority order.
+
+### Retrieval and grounding
+
+**Legal-domain embedding fine-tuning** — BGE `bge-base-en-v1.5` is a strong general-purpose model but was not trained on legal text. Fine-tuning on a contrastive dataset of (legal query, relevant passage) pairs from LegalBench-RAG or CUAD would likely push Recall@10 from 0.84 toward 0.92+. LoRA fine-tuning on `bge-base-en-v1.5` requires ~16GB VRAM and roughly 2 hours on a single A100.
+
+**Cross-document retrieval for case files** — The current retrieval layer operates per-document. A realistic legal workflow involves a folder of related documents (complaint + exhibits + prior orders). Adding a `case_id` grouping on `documents` and a `retrieve_across_case()` method in `RetrievalService` would allow drafts to draw evidence from any file in the case, not just the uploaded document.
+
+**Hybrid BM25 + dense retrieval** — Pure dense retrieval struggles with rare legal terms (statute numbers, case citations, defined proper nouns) that appear verbatim in the query but get diluted in the embedding space. Adding a BM25 sparse pass (via `rank-bm25` or pgvector's upcoming sparse support) and reciprocal-rank fusion with the dense results would improve precision on citation-heavy queries.
+
+**Full LegalBench-RAG 500-query benchmark** — Run `--limit 500 --corpus-scope all --with-expansion` once Gemini quota is available, commit the result to `evaluation/results/legalbench_rag_mini_results.json`, and update the README table. This is the standard comparison point for legal RAG systems in the literature.
+
+### OCR and document processing
+
+**Table extraction** — `pdfplumber` already ships with `page.extract_tables()`. Populating `extracted.tables` and storing structured table rows in a `document_tables` relation would unlock retrieval over financial schedules, asset inventories, and timeline grids that are currently invisible to the RAG layer.
+
+**Multi-page form stitching** — Legal forms often spread a single logical record (e.g., a party's affidavit) across many pages with repeated headers. A post-OCR stitching pass that collapses page-boundary duplicates before chunking would improve chunk coherence and reduce redundant evidence.
+
+**Confidence-based ensemble** — For each page, run both Tesseract and PaddleOCR, compare word-level confidence scores, and take the higher-confidence output field-by-field. This is more expensive but produces measurably better results on degraded scans with mixed print and handwriting.
+
+### Draft generation and improvement loop
+
+**Streaming draft output** — The current API returns the full draft JSON in one response after Gemini finishes generating. Adding a Server-Sent Events endpoint (`GET /documents/{id}/drafts/{draft_id}/stream`) would let the UI render sections as they complete, which matters for long documents where generation takes 15–30 seconds.
+
+**Draft export to Word / PDF** — Operators ultimately need to file or send drafts. A `GET /drafts/{id}/export?format=docx` endpoint using `python-docx` would turn the structured JSON sections into a formatted Word document with proper headings, page numbers, and citation footnotes.
+
+**Human review before preference is persisted** — Currently a preference rule is extracted from every edit and written to the database automatically. Adding a `status: pending_review` field and a `POST /preferences/{id}/approve` endpoint would let a senior operator verify that the distilled rule is sensible before it influences production drafts.
+
+**A/B testing draft templates** — The YAML template system already supports multiple section plans per draft type. Adding a flag on `DraftOutput` to record which template variant was used, and tracking edit rates per variant, would let the system identify which template structure produces the fewest operator corrections.
+
+**Preference clustering and merging** — As the rule store grows, semantically redundant preferences accumulate (e.g., "cite page numbers" and "always include a [Page N] reference" are the same rule). A periodic background job that clusters embeddings with DBSCAN and merges near-duplicate rules would keep the preference store lean and improve injection quality.
+
+### Analytics and observability
+
+**Grounding score trend dashboard** — `overall_grounding_score` is stored per draft. Plotting this over time per document type and per tenant would show whether the improvement loop is actually raising the average grounding score across the platform — the clearest signal that preference learning is working.
+
+**Edit heatmap** — Track which sections of which draft types are edited most often. A section that is edited on 80% of generated memos is a signal that the template or the retrieval query for that section is wrong, not that operators have unusual preferences.
+
+**Token cost tracking** — Log Gemini input/output tokens per generation, expansion, and preference extraction call. Sum by tenant and document type. Legal documents vary enormously in length; knowing which document types cost 10× more than average makes it possible to set per-tenant budgets.
+
+### Infrastructure
+
+**Cross-document conflict detection** — Extend `conflict_detector.py` to accept a list of `(document_id, chunk_texts)` tuples and flag contradictions across documents in the same case (e.g., two contract versions with different governing law clauses). The detection logic is identical; only the data model changes.
+
+**Legal citation resolution** — Parse statute citations (`28 U.S.C. § 1331`), case citations (`Ashcroft v. Iqbal, 556 U.S. 662`), and regulation references from extracted text and resolve them against an external API (CourtListener, OpenStates) to confirm they exist and retrieve the canonical text. Broken citations are a common source of hallucinated grounding.
+
+**Redaction / PII anonymization** — Before storing OCR text, run a NER pass to detect personal names, SSNs, financial account numbers, and addresses. Offer a `redact=true` upload flag that replaces detected PII with `[REDACTED]` in the stored text while preserving a reversible mapping in an encrypted column. Required for HIPAA/GDPR compliance in a production deployment.
+
+**Role-based access control** — Add a `users` table, JWT authentication on all endpoints, and a simple RBAC model (admin / reviewer / read-only). Multi-tenant isolation already exists at the data layer; adding auth at the API layer makes the system deployable as a real SaaS product.
