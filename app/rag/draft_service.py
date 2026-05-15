@@ -14,6 +14,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.config import get_settings
 from app.db.models import Document, DocumentChunk, DraftEdit, DraftOutput, DraftStatus
 from app.extraction.defined_terms import format_defined_terms_block
+from app.rag.conflict_detector import ConflictItem, format_conflicts_block
 from app.rag.draft_queries import DOCUMENT_TYPE_QUERIES, DRAFT_QUERIES
 from app.rag.draft_template_loader import load_draft_template
 from app.rag.gemini_client import GeminiClient
@@ -79,10 +80,12 @@ class DraftService:
             )
             structured_fields = export_payload.get("fields", {})
             defined_terms = export_payload.get("defined_terms", {})
+            raw_conflicts = export_payload.get("conflicts") or []
+            conflicts = [ConflictItem(**c) for c in raw_conflicts if isinstance(c, dict)]
             payload = self.gemini.generate_json(
                 system_prompt=self._system_prompt(draft_type, prefs, examples),
                 user_prompt=self._user_prompt(
-                    document, draft_type, structured_fields, chunks, defined_terms
+                    document, draft_type, structured_fields, chunks, defined_terms, conflicts
                 ),
             )
             content = score_sections(self._normalize_content(payload))
@@ -374,6 +377,7 @@ Respond in JSON with this structure:
         structured_fields: dict[str, Any],
         chunks: list[RetrievedChunk],
         defined_terms: dict[str, str] | None = None,
+        conflicts: list[ConflictItem] | None = None,
     ) -> str:
         chunk_block = "\n---\n".join(
             (
@@ -389,11 +393,13 @@ Respond in JSON with this structure:
             draft_type, document.document_type or "unknown"
         )
         defined_terms_block = format_defined_terms_block(defined_terms)
+        conflicts_block = format_conflicts_block(conflicts or [])
         return (
             f"DOCUMENT TYPE: {document.document_type or 'unknown'}\n"
             f"DRAFT DATE: {self._draft_date()}\n"
             f"STRUCTURED FIELDS EXTRACTED: {json.dumps(structured_fields, default=str)}\n\n"
             f"{defined_terms_block}\n\n"
+            f"{conflicts_block}\n\n"
             f"{draft_instructions}\n\n"
             f"{template_instructions}\n\n"
             f"SOURCE CHUNKS (ordered by relevance):\n---\n{chunk_block}\n---\n\n"

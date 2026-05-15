@@ -300,6 +300,10 @@ function createDocintel() {
         return Object.entries(terms).sort((a, b) => a[0].localeCompare(b[0]));
       },
 
+      conflicts() {
+        return this.selResult?.conflicts || [];
+      },
+
       async openDoc(doc) {
         this.view = 'detail';
         this.detailTab = 'drafts';

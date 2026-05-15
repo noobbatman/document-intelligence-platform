@@ -242,6 +242,23 @@
             </div>
 
             <div x-show="detailTab==='extraction'">
+              <!-- Conflict warning banner -->
+              <div class="conflict-banner" x-show="conflicts().length" style="margin-bottom:16px">
+                <div class="conflict-banner-head">
+                  <span class="conflict-icon">⚠</span>
+                  <strong x-text="conflicts().length + ' conflict' + (conflicts().length === 1 ? '' : 's') + ' detected'"></strong>
+                  <span class="text-sm text-muted" style="margin-left:8px">Contradictions found within this document</span>
+                </div>
+                <div class="conflict-list">
+                  <template x-for="(c, i) in conflicts()" :key="i">
+                    <div class="conflict-row">
+                      <span class="badge" :class="c.severity === 'high' ? 'badge-error' : 'badge-warn'" x-text="c.severity.toUpperCase()"></span>
+                      <span class="conflict-type" x-text="c.conflict_type.replace(/_/g,' ')"></span>
+                      <span class="conflict-desc" x-text="c.description"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
               <div class="grid-2" style="align-items:start">
                 <div class="card">
                   <div class="card-title">Extracted fields</div>

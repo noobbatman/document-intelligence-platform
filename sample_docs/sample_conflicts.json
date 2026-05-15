@@ -1,0 +1,35 @@
+{
+  "document_id": "example-contract-id",
+  "document_type": "contract",
+  "description": "Example conflict report for a contract with governing-law and defined-term contradictions",
+  "conflicts": [
+    {
+      "conflict_type": "governing_law",
+      "description": "Conflicting governing law references: \"new york\", \"delaware\".",
+      "chunk_indices": [2, 7],
+      "severity": "high",
+      "field": "governing_law"
+    },
+    {
+      "conflict_type": "defined_term",
+      "description": "\"confidential information\" has conflicting definitions across sections.",
+      "chunk_indices": [1, 5],
+      "severity": "medium",
+      "field": null
+    },
+    {
+      "conflict_type": "amount",
+      "description": "Inconsistent \"monthly fee\": $5000 vs. $5500.",
+      "chunk_indices": [3, 8],
+      "severity": "high",
+      "field": "amount"
+    }
+  ],
+  "conflict_count": 3,
+  "has_high_severity": true,
+  "notes": [
+    "Governing-law conflict: Section 12.1 cites New York law; Section 18.3 cites Delaware.",
+    "Defined-term conflict: Section 2 defines 'Confidential Information' to exclude publicly available data; Section 9 defines it more broadly to include all non-public information.",
+    "Amount conflict: Section 4 states the monthly fee is $5,000; the Schedule A attachment states $5,500."
+  ]
+}

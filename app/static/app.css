@@ -112,6 +112,15 @@ tbody td { padding: 9px 12px; color: var(--col-text); max-width: 220px; overflow
 .term-row:last-child { border-bottom: none; }
 .term-key { font-size: 12px; color: var(--col-accent); font-family: monospace; word-break: break-word; }
 .term-val { font-size: 13px; color: var(--col-text); line-height: 1.45; word-break: break-word; }
+.conflict-banner { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 8px; padding: 14px 16px; }
+.conflict-banner-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.conflict-icon { font-size: 16px; }
+.conflict-list { display: flex; flex-direction: column; gap: 8px; }
+.conflict-row { display: flex; align-items: baseline; gap: 10px; font-size: 13px; }
+.conflict-type { font-weight: 600; color: var(--col-text); text-transform: capitalize; min-width: 110px; flex-shrink: 0; }
+.conflict-desc { color: var(--col-muted); line-height: 1.45; }
+.badge-error { background: #fee2e2; color: #b91c1c; }
+.badge-warn { background: #fef3c7; color: #92400e; }
 .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-bar .spacer { flex: 1; min-width: 16px; }
 .pagination { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 12px; }
