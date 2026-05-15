@@ -206,6 +206,18 @@ STRICT GROUNDING RULES:
 
 Each draft section additionally carries a `confidence` field (`high` / `medium` / `low` / `unsupported`). Sections backed by multiple high-similarity chunks score `high`; sections where the model had to acknowledge gaps score `unsupported`.
 
+### Grounding score
+
+The platform also computes a deterministic `grounding_score` for every draft section. The scorer splits section prose into sentences, ignores structural fragments shorter than eight words, and counts a qualifying sentence as grounded only when it includes `[Page N]`, `[Page N - Section Title]`, `[Chunk N]`, or `[structured_fields]`. Any sentence containing `[UNSUPPORTED` counts as ungrounded.
+
+The section score is:
+
+```
+grounded qualifying sentences / total qualifying sentences
+```
+
+Each `DraftOutput` row stores `overall_grounding_score`, a word-count-weighted mean across its sections. In the Barker v. Landmark walkthrough, the generated internal memo scores 100% on heavily cited sections such as Factual Background and Relief Sought, while sections containing explicit `[UNSUPPORTED]` gaps score lower. The UI shows both the per-section grounding bar and the overall draft percentage (`Draft v2 · 1044 words · 91% grounded · reviewed`).
+
 Retrieved chunks are passed to the model as labeled source blocks:
 
 ```
@@ -309,6 +321,25 @@ PDF_RENDER_ZOOM=3.0
 | `PREFERENCE_DEDUP_THRESHOLD` | `0.85` | Cosine similarity threshold for deduplication |
 
 Full configuration: `.env.example`.
+
+---
+
+## Benchmarks
+
+The retrieval evaluator is LegalBench-RAG-compatible: it accepts the official `data/corpus` + `data/benchmarks` layout, chunks text with the production `SectionAwareChunker`, embeds with the production BGE wrapper, and reports Recall@K, Precision@K, and MRR. See [`evaluation/README.md`](evaluation/README.md).
+
+The committed result file [`evaluation/results/retrieval_results.json`](evaluation/results/retrieval_results.json) is a **smoke-fixture run only** — 3 queries, 9 chunks, `embedding_backend: hash_fallback`. Perfect scores on a 9-chunk corpus are trivially achievable by any retriever and carry no validity as a benchmark claim. The `expanded` run is identical to baseline because `GEMINI_API_KEY` was absent at run time. Full benchmark runs require `sentence-transformers` installed and intentionally fail without it.
+
+| Dataset | Backend | Variant | Queries | Recall@5 | Recall@10 | MRR |
+|---|---|---|---:|---:|---:|---:|
+| Smoke fixture ⚠ | hash fallback | baseline | 3 | 1.00 | 1.00 | 1.00 |
+| LegalBench-RAG mini | BGE (real) | — | — | _pending_ | _pending_ | _pending_ |
+
+To run against official LegalBench-RAG data after installing dependencies and downloading the dataset:
+
+```powershell
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data --limit 500 --with-expansion --output evaluation\results\legalbench_rag_mini_results.json
+```
 
 ---
 
