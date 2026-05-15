@@ -424,7 +424,7 @@ PDF_RENDER_ZOOM=3.0
 | `QUERY_EXPANSION_ENABLED` | `true` | Expand legal retrieval queries with Gemini synonyms before BGE embedding |
 | `QUERY_EXPANSION_MODEL` | `gemini-2.0-flash-lite` | Low-cost model used only for query expansion |
 | `QUERY_EXPANSION_MAX_TOKENS` | `256` | Max output tokens for query expansion calls |
-| `DRAFT_MODEL` | `gemini-2.5-flash` | Gemini model for draft generation |
+| `DRAFT_MODEL` | `gemini-2.0-flash` | Gemini model for draft generation |
 | `DRAFT_MAX_CHUNKS` | `10` | Max retrieved chunks per draft |
 | `PREFERENCE_MAX_PER_DRAFT` | `5` | Max learned preferences injected per draft |
 | `PREFERENCE_DEDUP_THRESHOLD` | `0.85` | Cosine similarity threshold for deduplication |
@@ -571,6 +571,8 @@ These are honest gaps in the current implementation — things that work by desi
 **OCR on real messy documents** — The preprocessing pipeline (deskew, denoise, CLAHE) and TrOCR fallback are implemented and tested in isolation, but the `sample_docs/` directory contains clean synthetic text files rather than genuinely scanned PDFs. The pipeline has never been validated end-to-end on a real degraded scan. PaddleOCR and TrOCR are also behind optional extras (`pip install ".[paddle]"` / `".[ml]"`) because they require large model downloads that are impractical in CI.
 
 **LegalBench-RAG benchmark scope** — The committed benchmark result covers 25 queries (`--limit 25`, `--corpus-scope referenced`). The full 500-query mini run and full-corpus run have not been completed because they require the 79M-character dataset and several hours of embedding time. The 25-query numbers (Recall@5 = 0.72, Recall@10 = 0.84, MRR = 0.43) are real BGE results on real legal text, but a larger sample would give more confidence in the figures.
+
+**Draft generation and Gemini fill require a live API key with available quota** — OCR, classification, regex extraction, BGE embedding, conflict detection, and grounding scoring all run locally without any API calls. Draft generation and the Gemini fill step in extraction require a `GEMINI_API_KEY` with remaining quota. During end-to-end testing of the ANF separation agreement (a real 40-page SEC filing), OCR, classification (`contract`, 87.5% confidence), and regex extraction (party names, governing law, confidentiality clause) all completed correctly in 47 seconds; draft generation was blocked by free-tier quota exhaustion (20 req/day on `gemini-2.5-flash`). Switching to `DRAFT_MODEL=gemini-2.0-flash` (1,500 req/day free) and ensuring quota is available resolves this.
 
 **Query expansion requires Gemini quota** — `QUERY_EXPANSION_ENABLED=true` by default, but the comparison between baseline and expanded retrieval in the evaluator is only meaningful when `GEMINI_API_KEY` is set. Without it, both runs are identical. The code falls back silently so nothing breaks, but the Recall@10 uplift (+8–12% per Stanford RegLab) cannot be demonstrated without a live key.
 

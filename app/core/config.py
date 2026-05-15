@@ -112,7 +112,7 @@ class Settings(BaseSettings):
 
     # ── Drafting / Preference Learning ────────────────────────────────────────
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    draft_model: str = Field(default="gemini-2.5-flash", alias="DRAFT_MODEL")
+    draft_model: str = Field(default="gemini-2.0-flash", alias="DRAFT_MODEL")
     draft_max_chunks: int = Field(default=10, alias="DRAFT_MAX_CHUNKS")
     draft_max_tokens: int = Field(default=8192, alias="DRAFT_MAX_TOKENS")
     preference_dedup_threshold: float = Field(default=0.85, alias="PREFERENCE_DEDUP_THRESHOLD")
