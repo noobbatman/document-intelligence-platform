@@ -5,6 +5,7 @@ import pytest
 from app.classification.hybrid_classifier import HybridDocumentClassifier
 from app.db.models import (
     Document,
+    DocumentChunk,
     DocumentStatus,
     DraftEdit,
     DraftOutput,
@@ -21,6 +22,10 @@ from app.rag.draft_service import DraftService
 from app.rag.embedder import Embedder
 from app.rag.embedding_service import EmbeddingService
 from app.rag.grounding_scorer import overall_score, score, score_sections
+from app.rag.jurisdiction import (
+    detect_chunk_jurisdiction,
+    detect_document_jurisdiction_tags,
+)
 from app.rag.preference_service import PreferenceService
 from app.rag.retrieval_service import RetrievalService, RetrievedChunk
 
@@ -154,6 +159,121 @@ def test_defined_terms_prompt_block():
 
     assert "DEFINED TERMS IN THIS DOCUMENT" in block
     assert '"LCU" = Landmark Credit Union' in block
+
+
+def test_jurisdiction_detector_tags_federal_and_state_signals():
+    text = (
+        "Jurisdiction arises under 28 U.S.C. § 1331 in the E.D. Wis. "
+        "The complaint also cites Wis. Stat. § 137.01."
+    )
+
+    tags = detect_document_jurisdiction_tags(text, {"venue": "28 U.S.C. § 1391(b)"})
+
+    assert "federal" in tags
+    assert "federal:EDWI" in tags
+    assert "state:WI" in tags
+    assert detect_chunk_jurisdiction("Venue is proper in the E.D. Wis.") == "federal:EDWI"
+
+
+def test_embedding_stores_chunk_jurisdiction(db_session):
+    doc = Document(
+        filename="complaint.txt",
+        stored_path="complaint.txt",
+        content_type="application/pdf",
+        status=DocumentStatus.completed,
+        document_type="legal_complaint",
+        pipeline_version="test",
+    )
+    db_session.add(doc)
+    db_session.flush()
+    db_session.add(
+        ExtractionResult(
+            document_id=doc.id,
+            ocr_text="Jurisdiction arises under 28 U.S.C. § 1331 in the E.D. Wis.",
+            export_payload={"fields": {}, "jurisdiction_tags": ["federal", "federal:EDWI"]},
+        )
+    )
+    db_session.commit()
+
+    EmbeddingService().embed_document(doc.id, db_session)
+
+    chunk = db_session.query(DocumentChunk).filter_by(document_id=doc.id).one()
+    assert chunk.jurisdiction == "federal:EDWI"
+
+
+def test_retrieval_soft_filters_by_document_jurisdiction(db_session, monkeypatch):
+    doc = Document(
+        filename="complaint.txt",
+        stored_path="complaint.txt",
+        content_type="application/pdf",
+        status=DocumentStatus.completed,
+        document_type="legal_complaint",
+        pipeline_version="test",
+    )
+    db_session.add(doc)
+    db_session.flush()
+    db_session.add(
+        ExtractionResult(
+            document_id=doc.id,
+            ocr_text="",
+            export_payload={"jurisdiction_tags": ["federal"]},
+        )
+    )
+    db_session.add_all(
+        [
+            DocumentChunk(
+                document_id=doc.id,
+                chunk_index=0,
+                page_number=1,
+                section_header=None,
+                jurisdiction="federal",
+                text="Federal question jurisdiction under 28 U.S.C. § 1331.",
+                char_start=0,
+                char_end=10,
+                embedding=[1.0] + [0.0] * 767,
+            ),
+            DocumentChunk(
+                document_id=doc.id,
+                chunk_index=1,
+                page_number=1,
+                section_header=None,
+                jurisdiction="state:CA",
+                text="California state law issue.",
+                char_start=11,
+                char_end=20,
+                embedding=[1.0] + [0.0] * 767,
+            ),
+            DocumentChunk(
+                document_id=doc.id,
+                chunk_index=2,
+                page_number=1,
+                section_header=None,
+                jurisdiction=None,
+                text="Untagged factual background.",
+                char_start=21,
+                char_end=30,
+                embedding=[1.0] + [0.0] * 767,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    service = RetrievalService()
+    service.settings.query_expansion_enabled = False
+    monkeypatch.setattr(service.embedder, "encode_query", lambda query: [1.0] + [0.0] * 767)
+
+    results = service.retrieve(
+        doc.id,
+        "jurisdiction facts",
+        top_k=10,
+        min_score=-1.0,
+        session=db_session,
+    )
+
+    texts = [item.text for item in results]
+    assert "Federal question jurisdiction under 28 U.S.C. § 1331." in texts
+    assert "Untagged factual background." in texts
+    assert "California state law issue." not in texts
 
 
 def test_bge_prefixes_are_query_only(monkeypatch):
@@ -513,6 +633,7 @@ def test_draft_chunk_selection_diversifies_long_documents(db_session):
             chunk_index=idx * 10,
             page_number=1,
             section_header=None,
+            jurisdiction=None,
             text=f"chunk {idx}",
             similarity_score=1.0 - (idx * 0.01),
         )

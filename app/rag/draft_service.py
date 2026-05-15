@@ -289,6 +289,7 @@ class DraftService:
                         chunk_index=chunk.chunk_index,
                         page_number=chunk.page_number,
                         section_header=chunk.section_header,
+                        jurisdiction=chunk.jurisdiction,
                         text=chunk.text,
                         similarity_score=0.5,
                     )

@@ -10,7 +10,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import DocumentChunk
+from app.db.models import Document, DocumentChunk
 from app.rag.embedder import get_embedder
 from app.rag.gemini_client import GeminiClient
 
@@ -24,6 +24,7 @@ class RetrievedChunk:
     chunk_index: int
     page_number: int
     section_header: str | None
+    jurisdiction: str | None
     text: str
     similarity_score: float
 
@@ -48,11 +49,16 @@ class RetrievalService:
         query_vec = self.embedder.encode_query(expanded_query)
         top_k = top_k or self.settings.retrieval_top_k
         min_score = self.settings.retrieval_min_score if min_score is None else min_score
+        jurisdiction_tags = self._document_jurisdiction_tags(document_id, session)
 
         dialect_name = session.get_bind().dialect.name
         if dialect_name == "postgresql":
-            return self._retrieve_postgres(document_id, query_vec, top_k, min_score, session)
-        return self._retrieve_python(document_id, query_vec, top_k, min_score, session)
+            return self._retrieve_postgres(
+                document_id, query_vec, top_k, min_score, jurisdiction_tags, session
+            )
+        return self._retrieve_python(
+            document_id, query_vec, top_k, min_score, jurisdiction_tags, session
+        )
 
     def retrieve_multi_document(
         self,
@@ -81,19 +87,28 @@ class RetrievalService:
         query_vec: list[float],
         top_k: int,
         min_score: float,
+        jurisdiction_tags: list[str],
         session: Session,
     ) -> list[RetrievedChunk]:
         query_vec_literal = "[" + ",".join(str(round(v, 8)) for v in query_vec) + "]"
+        jurisdiction_csv = ",".join(jurisdiction_tags)
         rows = session.execute(
             text(
                 """
                 WITH scored AS (
-                    SELECT id, document_id, chunk_index, page_number, section_header, text,
+                    SELECT id, document_id, chunk_index, page_number, section_header,
+                           jurisdiction, text,
                            1 - (embedding <=> CAST(:query_vec AS vector)) AS similarity
                     FROM document_chunks
                     WHERE document_id = :document_id
+                      AND (
+                        :jurisdiction_filter = false
+                        OR jurisdiction IS NULL
+                        OR jurisdiction = ANY(string_to_array(:jurisdiction_tags, ','))
+                      )
                 )
-                SELECT id, document_id, chunk_index, page_number, section_header, text, similarity
+                SELECT id, document_id, chunk_index, page_number, section_header,
+                       jurisdiction, text, similarity
                 FROM scored
                 WHERE similarity >= :min_score
                 ORDER BY similarity DESC
@@ -105,6 +120,8 @@ class RetrievalService:
                 "document_id": document_id,
                 "min_score": min_score,
                 "top_k": top_k,
+                "jurisdiction_filter": bool(jurisdiction_tags),
+                "jurisdiction_tags": jurisdiction_csv,
             },
         ).mappings()
         return [
@@ -114,6 +131,7 @@ class RetrievalService:
                 chunk_index=row["chunk_index"],
                 page_number=row["page_number"],
                 section_header=row["section_header"],
+                jurisdiction=row["jurisdiction"],
                 text=row["text"],
                 similarity_score=round(float(row["similarity"]), 4),
             )
@@ -126,8 +144,10 @@ class RetrievalService:
         query_vec: list[float],
         top_k: int,
         min_score: float,
+        jurisdiction_tags: list[str],
         session: Session,
     ) -> list[RetrievedChunk]:
+        allowed = set(jurisdiction_tags)
         chunks = list(
             session.scalars(
                 select(DocumentChunk)
@@ -142,11 +162,13 @@ class RetrievalService:
                 chunk_index=chunk.chunk_index,
                 page_number=chunk.page_number,
                 section_header=chunk.section_header,
+                jurisdiction=chunk.jurisdiction,
                 text=chunk.text,
                 similarity_score=round(_cosine(query_vec, chunk.embedding), 4),
             )
             for chunk in chunks
             if chunk.embedding is not None
+            and (not allowed or chunk.jurisdiction is None or chunk.jurisdiction in allowed)
         ]
         return [
             item
@@ -186,6 +208,16 @@ class RetrievalService:
             expanded_query = query
         self._query_expansion_cache[query] = expanded_query
         return expanded_query
+
+    def _document_jurisdiction_tags(self, document_id: str, session: Session) -> list[str]:
+        document = session.get(Document, document_id)
+        if not document or not document.extraction_result:
+            return []
+        payload = document.extraction_result.export_payload or {}
+        tags = payload.get("jurisdiction_tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        return [str(tag) for tag in tags if tag]
 
 
 def _cosine(left: list[float], right: list[float]) -> float:

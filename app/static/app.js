@@ -375,6 +375,14 @@ function createDocintel() {
         return `Page ${chunk.page_number}${section} | Chunk ${chunk.chunk_index}`;
       },
 
+      jurisdictionLabel(tag) {
+        if (!tag) return '';
+        if (tag === 'federal') return 'Federal';
+        if (tag.startsWith('federal:')) return `Federal ${tag.slice(8)}`;
+        if (tag.startsWith('state:')) return `State: ${tag.slice(6)}`;
+        return tag;
+      },
+
       selectDraft(index) {
         if (index < 0 || index >= this.drafts.length) return;
         this.selectedDraftIndex = index;

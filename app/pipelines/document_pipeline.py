@@ -12,6 +12,7 @@ from app.extraction.defined_terms import extract_defined_terms
 from app.extraction.factory import get_extractor
 from app.ocr.factory import get_ocr_provider
 from app.pipelines.confidence import ConfidenceScorer
+from app.rag.jurisdiction import detect_document_jurisdiction_tags
 from app.utils.text import normalize_ocr_artifacts
 from app.utils.validators import run_validators
 
@@ -56,6 +57,7 @@ class DocumentPipeline:
             fields=fields,
             existing=extracted.defined_terms,
         )
+        jurisdiction_tags = detect_document_jurisdiction_tags(normalized_text, fields)
 
         # 6. Field validation
         validation_results = run_validators(extracted.document_type, fields)
@@ -104,6 +106,7 @@ class DocumentPipeline:
             "source_file": Path(path).name,
             "fields": fields,
             "defined_terms": defined_terms,
+            "jurisdiction_tags": jurisdiction_tags,
             "entities": extracted.entities,
             "tables": extracted.tables,
             "field_confidences": [fc.model_dump() for fc in field_confidences],
@@ -122,12 +125,14 @@ class DocumentPipeline:
                 "classification": asdict(classification),
                 "fields": fields,
                 "defined_terms": defined_terms,
+                "jurisdiction_tags": jurisdiction_tags,
                 "entities": extracted.entities,
                 "tables": extracted.tables,
             },
             "normalized_payload": {
                 "fields": fields,
                 "defined_terms": defined_terms,
+                "jurisdiction_tags": jurisdiction_tags,
                 "entities": extracted.entities,
                 "tables": extracted.tables,
             },
@@ -138,6 +143,7 @@ class DocumentPipeline:
                 "extraction_mode": extracted.metadata.get("extraction_mode"),
                 "pipeline_version": self.settings.pipeline_version,
                 "defined_terms_count": len(defined_terms),
+                "jurisdiction_tags": jurisdiction_tags,
                 "validation_results": validation_results,
             },
             "low_confidence_fields": low_conf_fields,

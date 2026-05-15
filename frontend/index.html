@@ -218,7 +218,10 @@
                         <div class="text-sm text-muted mb-8" x-text="sectionEvidence(currentDraft, section).length + ' evidence chunk(s)'"></div>
                         <template x-for="chunk in sectionEvidence(currentDraft, section)" :key="chunk.id">
                           <div class="evidence-card">
-                            <div class="evidence-title" x-text="evidenceLabel(chunk)"></div>
+                            <div class="evidence-title">
+                              <span x-text="evidenceLabel(chunk)"></span>
+                              <span class="badge badge-info" x-show="chunk.jurisdiction" x-text="jurisdictionLabel(chunk.jurisdiction)"></span>
+                            </div>
                             <div class="evidence-text" x-text="chunk.text"></div>
                           </div>
                         </template>
@@ -278,7 +281,10 @@
                 <div style="display:flex;flex-direction:column;gap:10px">
                   <template x-for="chunk in currentEvidence" :key="chunk.id">
                     <div class="evidence-card">
-                      <div class="evidence-title" x-text="evidenceLabel(chunk)"></div>
+                      <div class="evidence-title">
+                        <span x-text="evidenceLabel(chunk)"></span>
+                        <span class="badge badge-info" x-show="chunk.jurisdiction" x-text="jurisdictionLabel(chunk.jurisdiction)"></span>
+                      </div>
                       <div class="evidence-text" x-text="chunk.text"></div>
                     </div>
                   </template>

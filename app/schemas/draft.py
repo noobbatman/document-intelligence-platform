@@ -63,6 +63,7 @@ class DraftEvidenceChunk(BaseModel):
     chunk_index: int
     page_number: int
     section_header: str | None = None
+    jurisdiction: str | None = None
     text: str
 
 

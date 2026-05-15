@@ -241,8 +241,19 @@ pipeline:
    embedding. The expanded query is cached per retrieval service instance and
    falls back to the original query on missing keys, rate limits, or parsing
    failures.
-7. Gemini 2.5 Flash generates structured draft sections with inline page
+7. Chunks are jurisdiction-tagged from citation patterns such as `28 U.S.C.`,
+   `E.D. Wis.`, and `Wis. Stat.`. Retrieval applies a soft jurisdiction filter:
+   chunks matching the document's normalized jurisdiction tags are included,
+   untagged chunks are included, and chunks with conflicting known jurisdictions
+   are excluded.
+8. Gemini 2.5 Flash generates structured draft sections with inline page
    citations and evidence chunk IDs.
+
+Jurisdiction detection is intentionally lightweight: it uses citation pattern
+matching rather than a full legal citation parser. It reliably identifies common
+federal, federal-district, and state-level signals in ordinary litigation and
+contract text. Multi-jurisdictional documents may carry multiple document tags;
+retrieval includes chunks matching any of those tags plus unknown chunks.
 
 Drafts are stored in `draft_outputs`, with statuses for `generating`, `draft`,
 `reviewed`, and `approved`.

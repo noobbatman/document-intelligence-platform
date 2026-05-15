@@ -10,6 +10,7 @@ from app.db.models import DocumentChunk as ChunkModel
 from app.extraction.defined_terms import annotate_defined_terms
 from app.rag.chunker import SectionAwareChunker
 from app.rag.embedder import get_embedder
+from app.rag.jurisdiction import detect_chunk_jurisdiction
 
 
 class EmbeddingService:
@@ -36,6 +37,7 @@ class EmbeddingService:
                     chunk_index=chunk.chunk_index,
                     page_number=chunk.page_number,
                     section_header=chunk.section_header,
+                    jurisdiction=detect_chunk_jurisdiction(chunk.text),
                     text=annotated_text,
                     char_start=chunk.char_start,
                     char_end=chunk.char_end,
