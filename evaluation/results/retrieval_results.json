@@ -1,0 +1,166 @@
+{
+  "benchmark": "LegalBench-RAG compatible retrieval evaluation",
+  "data_root": "evaluation\\retrieval\\sample_legalbench_rag",
+  "benchmark_files": [
+    "evaluation\\retrieval\\sample_legalbench_rag\\benchmarks\\sample_benchmark.json"
+  ],
+  "model": "BAAI/bge-base-en-v1.5",
+  "embedding_backend": "sentence_transformers",
+  "query_expansion": {
+    "requested": true,
+    "backend": "disabled_or_no_key"
+  },
+  "chunk_size_chars": 600,
+  "chunk_overlap_chars": 120,
+  "corpus_documents": 2,
+  "corpus_chunks": 9,
+  "evaluated_at": "2026-05-15T06:12:54.699464+00:00",
+  "runs": {
+    "baseline": {
+      "total_queries": 3,
+      "recall@5": 1.0,
+      "precision@5": 0.2,
+      "recall@10": 1.0,
+      "precision@10": 0.1,
+      "mrr": 1.0
+    },
+    "expanded": {
+      "total_queries": 3,
+      "recall@5": 1.0,
+      "precision@5": 0.2,
+      "recall@10": 1.0,
+      "precision@10": 0.1,
+      "mrr": 1.0
+    }
+  },
+  "case_details": {
+    "baseline": [
+      {
+        "case_id": "smoke-payment-terms",
+        "query": "payment deadline monthly service fee",
+        "expanded_query": null,
+        "relevant_chunk_ids": [
+          "contracts/service_agreement.txt::2"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/service_agreement.txt::2",
+          "contracts/service_agreement.txt::0",
+          "contracts/service_agreement.txt::4",
+          "contracts/service_agreement.txt::1",
+          "contracts/privacy_policy.txt::1",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::3"
+        ],
+        "first_hit_rank": 1
+      },
+      {
+        "case_id": "smoke-confidentiality",
+        "query": "disclosure of patient data trade secrets required by law",
+        "expanded_query": null,
+        "relevant_chunk_ids": [
+          "contracts/service_agreement.txt::3"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/service_agreement.txt::3",
+          "contracts/service_agreement.txt::1",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::1",
+          "contracts/service_agreement.txt::0",
+          "contracts/service_agreement.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::4"
+        ],
+        "first_hit_rank": 1
+      },
+      {
+        "case_id": "smoke-retention",
+        "query": "how long are audit logs preserved",
+        "expanded_query": null,
+        "relevant_chunk_ids": [
+          "contracts/privacy_policy.txt::3"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::2",
+          "contracts/service_agreement.txt::4",
+          "contracts/service_agreement.txt::0",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::1",
+          "contracts/service_agreement.txt::1",
+          "contracts/service_agreement.txt::3"
+        ],
+        "first_hit_rank": 1
+      }
+    ],
+    "expanded": [
+      {
+        "case_id": "smoke-payment-terms",
+        "query": "payment deadline monthly service fee",
+        "expanded_query": "payment deadline monthly service fee",
+        "relevant_chunk_ids": [
+          "contracts/service_agreement.txt::2"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/service_agreement.txt::2",
+          "contracts/service_agreement.txt::0",
+          "contracts/service_agreement.txt::4",
+          "contracts/service_agreement.txt::1",
+          "contracts/privacy_policy.txt::1",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::3"
+        ],
+        "first_hit_rank": 1
+      },
+      {
+        "case_id": "smoke-confidentiality",
+        "query": "disclosure of patient data trade secrets required by law",
+        "expanded_query": "disclosure of patient data trade secrets required by law",
+        "relevant_chunk_ids": [
+          "contracts/service_agreement.txt::3"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/service_agreement.txt::3",
+          "contracts/service_agreement.txt::1",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::1",
+          "contracts/service_agreement.txt::0",
+          "contracts/service_agreement.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::4"
+        ],
+        "first_hit_rank": 1
+      },
+      {
+        "case_id": "smoke-retention",
+        "query": "how long are audit logs preserved",
+        "expanded_query": "how long are audit logs preserved",
+        "relevant_chunk_ids": [
+          "contracts/privacy_policy.txt::3"
+        ],
+        "retrieved_chunk_ids": [
+          "contracts/privacy_policy.txt::3",
+          "contracts/service_agreement.txt::2",
+          "contracts/service_agreement.txt::4",
+          "contracts/service_agreement.txt::0",
+          "contracts/privacy_policy.txt::2",
+          "contracts/privacy_policy.txt::0",
+          "contracts/privacy_policy.txt::1",
+          "contracts/service_agreement.txt::1",
+          "contracts/service_agreement.txt::3"
+        ],
+        "first_hit_rank": 1
+      }
+    ]
+  },
+  "notes": [
+    "Uses the production SectionAwareChunker and Embedder code paths.",
+    "If embedding_backend is hash_fallback, numbers are smoke-test only and do not represent production BGE quality."
+  ]
+}

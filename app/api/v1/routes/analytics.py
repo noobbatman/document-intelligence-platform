@@ -65,9 +65,17 @@ def metrics_overview(db: Session = DB_DEP, tenant_id: str | None = TENANT_DEP) -
     corrections_stmt = select(func.count(CorrectionRecord.id)).join(Document)
     total_corrections = db.scalar(_document_scope(corrections_stmt, tenant_id)) or 0
 
+    grounding_stmt = (
+        select(func.avg(DraftOutput.overall_grounding_score))
+        .join(Document)
+        .where(DraftOutput.overall_grounding_score.is_not(None))
+    )
+    avg_grounding = db.scalar(_document_scope(grounding_stmt, tenant_id))
+
     return {
         "total_documents": total_documents,
         "avg_document_confidence": float(avg_confidence) if avg_confidence is not None else None,
+        "avg_draft_grounding_score": float(avg_grounding) if avg_grounding is not None else None,
         "pending_review_tasks": pending_review,
         "total_corrections": total_corrections,
         "by_status": {status: count for status, count in status_rows},

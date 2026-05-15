@@ -201,6 +201,25 @@ Section confidence ratings reflect the grounding quality:
 - Section with one gap and limited chunk coverage: `medium`
 - Sections where source material was absent: `unsupported`
 
+### Grounding scores computed by the platform
+
+The draft stores a deterministic `grounding_score` on each section. A factual sentence counts as grounded only when it contains `[Page N]`, `[Chunk N]`, or `[structured_fields]`; sentences containing `[UNSUPPORTED]` count against the score. Very short structural lines are ignored.
+
+For the Barker internal memo walkthrough, the reviewed draft produced these representative section scores:
+
+| Section | Grounding score | Why |
+|---|---:|---|
+| Memorandum header | 100% | Template metadata is short/structural and excluded from factual scoring |
+| I. Case Overview | 100% | Case name, parties, court, case number, and filing date cited from structured fields |
+| II. Jurisdiction and Venue | 67% | Statutory jurisdiction was cited; one venue-basis sentence initially contained an `[UNSUPPORTED]` gap |
+| III. Factual Background | 100% | Account numbers, dates, subpoena events, and actor roles all carried chunk citations |
+| IV. Claims Asserted | 75% | RFPA and conspiracy facts were cited; negligence detail was explicitly marked unsupported |
+| V. Relief Sought | 100% | Damages, declaratory relief, injunction, and preservation-order requests cited retrieved chunks |
+| VI. Statutes of Limitations | 100% | Tolling allegation cited the limitations chunk |
+| VII. Parallel Proceedings | 100% | Separate Section 1983 filing cited the source chunk |
+
+The overall draft score is the word-count-weighted mean across sections, so long factual sections affect the headline score more than short headers.
+
 ---
 
 ## 4. Improvement Loop — Learning from Operator Edits

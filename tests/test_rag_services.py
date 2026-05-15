@@ -15,6 +15,7 @@ from app.rag.chunker import SectionAwareChunker
 from app.rag.draft_service import DraftService
 from app.rag.embedder import Embedder
 from app.rag.embedding_service import EmbeddingService
+from app.rag.grounding_scorer import overall_score, score, score_sections
 from app.rag.preference_service import PreferenceService
 from app.rag.retrieval_service import RetrievalService, RetrievedChunk
 
@@ -43,6 +44,38 @@ def test_classifier_recognizes_legal_notice():
 
     assert result.label == "legal_notice"
     assert result.confidence > 0.4
+
+
+def test_grounding_scorer_counts_cited_factual_sentences():
+    content = (
+        "The plaintiff opened an account at Landmark Credit Union on November 27, 2013 [Page 5]. "
+        "The subpoena was issued before valid legal process was confirmed. "
+        "[UNSUPPORTED: Venue facts were not located in the source material.] "
+        "Conclusion."
+    )
+
+    assert score(content) == 0.33
+
+
+def test_grounding_scorer_adds_section_and_overall_scores():
+    content = {
+        "sections": [
+            {
+                "key": "facts",
+                "content": "The plaintiff opened an account at Landmark Credit Union on November 27, 2013 [Chunk 1].",
+            },
+            {
+                "key": "venue",
+                "content": "Venue is proper because defendants operated in the district.",
+            },
+        ]
+    }
+
+    scored = score_sections(content)
+
+    assert scored["sections"][0]["grounding_score"] == 1.0
+    assert scored["sections"][1]["grounding_score"] == 0.0
+    assert overall_score(scored) is not None
 
 
 def test_embedding_and_retrieval_round_trip(db_session):
@@ -163,12 +196,22 @@ def test_draft_edit_capture_updates_content(db_session):
         draft_id=draft.id,
         tenant_id=None,
         reviewer_name="analyst",
-        sections=[{"key": "payment_terms", "edited_content": "Payment is due within thirty days."}],
+        sections=[
+            {
+                "key": "payment_terms",
+                "edited_content": "Payment is due within thirty days after the invoice is received.",
+            }
+        ],
     )
 
     assert updated.status == "reviewed"
     assert len(edits) == 1
-    assert updated.content["sections"][0]["content"] == "Payment is due within thirty days."
+    assert (
+        updated.content["sections"][0]["content"]
+        == "Payment is due within thirty days after the invoice is received."
+    )
+    assert updated.content["sections"][0]["grounding_score"] == 0.0
+    assert updated.overall_grounding_score == 0.0
 
 
 def test_draft_generation_failure_marks_failed(db_session, monkeypatch):
@@ -195,6 +238,7 @@ def test_draft_generation_failure_marks_failed(db_session, monkeypatch):
 
     draft = db_session.query(DraftOutput).filter_by(document_id=doc.id).one()
     assert draft.status == "failed"
+    assert draft.overall_grounding_score == 0.0
 
 
 def test_preference_duplicate_updates_higher_confidence_text(db_session, monkeypatch):

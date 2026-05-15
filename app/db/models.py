@@ -337,6 +337,7 @@ class DraftOutput(Base):
     evidence_chunk_ids: Mapped[list[str]] = mapped_column(TextList, default=list)
     generation_version: Mapped[int] = mapped_column(Integer, default=1)
     word_count: Mapped[int] = mapped_column(Integer, default=0)
+    overall_grounding_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     preferences_applied: Mapped[list[str]] = mapped_column(TextList, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

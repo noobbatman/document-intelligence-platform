@@ -17,6 +17,9 @@ data/uploads/*
 data/exports/*
 !data/uploads/.gitkeep
 !data/exports/.gitkeep
+# LegalBench-RAG dataset — too large to commit (79M+ chars); download separately
+data/legalbenchrag/
+data/*.zip
 postgres_data/
 redis_data/
 aws/rendered/

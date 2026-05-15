@@ -17,31 +17,47 @@ The official LegalBench-RAG benchmark is described in arXiv:2408.10343 and the p
 ### Run the committed smoke fixture
 
 ```powershell
-.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --with-expansion --include-details --allow-hash-fallback --output evaluation\results\retrieval_results.json
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --with-expansion --include-details --output evaluation\results\retrieval_results.json
 ```
 
 Current committed smoke results:
 
 | Run | Queries | Recall@5 | Recall@10 | Precision@5 | Precision@10 | MRR | Backend |
 |---|---:|---:|---:|---:|---:|---:|---|
-| baseline | 3 | 1.00 | 1.00 | 0.20 | 0.10 | 1.00 | hash fallback |
-| expanded | 3 | 1.00 | 1.00 | 0.20 | 0.10 | 1.00 | hash fallback |
+| baseline | 3 | 1.00 | 1.00 | 0.20 | 0.10 | 1.00 | sentence-transformers/BGE |
+| expanded | 3 | 1.00 | 1.00 | 0.20 | 0.10 | 1.00 | sentence-transformers/BGE |
 
-These smoke numbers are deliberately not presented as production retrieval quality. They prove that the evaluator loads a corpus, chunks it with the production `SectionAwareChunker`, maps gold snippets to chunks, retrieves top-k passages, and computes metrics. When `sentence-transformers` and `BAAI/bge-base-en-v1.5` are installed, omit `--allow-hash-fallback`; the evaluator will then require real embeddings and report `embedding_backend: sentence_transformers` in `evaluation/results/retrieval_results.json`.
+These smoke numbers are deliberately not presented as production retrieval quality. They prove that the evaluator loads a corpus, chunks it with the production `SectionAwareChunker`, maps gold snippets to chunks, embeds with `BAAI/bge-base-en-v1.5`, retrieves top-k passages, and computes metrics. The committed result file reports `embedding_backend: sentence_transformers`.
 
 ### Run the official LegalBench-RAG data
 
-After downloading the official dataset so that `data/corpus` and `data/benchmarks` exist, install the declared dependencies first (`.\.venv\Scripts\python -m pip install -r requirements.txt`). The official-data commands intentionally do not pass `--allow-hash-fallback`, so they fail fast if real BGE embeddings are unavailable:
+After downloading the official dataset so that `data/corpus` and `data/benchmarks` exist, install the declared dependencies first (`.\.venv\Scripts\python -m pip install -r requirements.txt`). The official-data commands intentionally do not pass `--allow-hash-fallback`, so they fail fast if real BGE embeddings are unavailable.
+
+**Fast 25-query run** (scopes corpus to referenced files only — much faster):
 
 ```powershell
-.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data --with-expansion --output evaluation\results\legalbench_rag_full_results.json
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data\legalbenchrag --limit 25 --output evaluation\results\legalbench_rag_mini_results.json
 ```
 
-Use `--limit 500` for a LegalBench-RAG-mini style run:
+**500-query mini run** (full corpus, with query expansion):
 
 ```powershell
-.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data --limit 500 --with-expansion --output evaluation\results\legalbench_rag_mini_results.json
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data\legalbenchrag --limit 500 --corpus-scope all --with-expansion --output evaluation\results\legalbench_rag_mini_results.json
 ```
+
+**Full dataset run**:
+
+```powershell
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data\legalbenchrag --corpus-scope all --with-expansion --output evaluation\results\legalbench_rag_full_results.json
+```
+
+### Committed mini results
+
+| Queries | Corpus scope | Recall@5 | Recall@10 | Precision@5 | Precision@10 | MRR | Backend |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 25 | referenced | **0.72** | **0.84** | 0.184 | 0.152 | **0.43** | sentence-transformers/BGE |
+
+Full result file: [`evaluation/results/legalbench_rag_mini_results.json`](results/legalbench_rag_mini_results.json).
 
 ## Metrics
 
@@ -58,10 +74,10 @@ If `GEMINI_API_KEY` is not configured, expansion safely falls back to the origin
 
 ## Methodology limits
 
-**The committed fixture is a smoke test, not a benchmark result.** It covers 3 queries over a 9-chunk corpus. Perfect scores (Recall@5 = 1.0, MRR = 1.0) on a 9-chunk corpus are trivially achievable by any retriever — there is almost nowhere to rank the gold chunk except in the top K. These numbers say nothing about retrieval quality on a real legal corpus and must not be compared to any prior art or cited as evidence of system performance.
+**The committed fixture is a smoke test, not a benchmark result.** It covers 3 queries over a 9-chunk corpus. Perfect scores (Recall@5 = 1.0, MRR = 1.0) on a 9-chunk corpus are trivially achievable by any retriever — there is almost nowhere to rank the gold chunk except in the top K. These numbers say little about retrieval quality on a real legal corpus and must not be compared to prior art as a performance claim.
 
-The `embedding_backend: hash_fallback` field in the result JSON confirms real BGE embeddings were not used. Hash embeddings do not capture semantic similarity — they merely verify that the evaluation pipeline runs end-to-end.
+The committed JSON records `embedding_backend: sentence_transformers`, so the smoke run did use the real BGE embedding path. If a future run reports `hash_fallback`, it should be treated only as a pipeline smoke test.
 
 The `expanded` run shows `expanded_query` identical to the raw query because `GEMINI_API_KEY` was not set at run time. The baseline vs. expansion comparison is therefore meaningless in the committed results. To produce a valid comparison, set `GEMINI_API_KEY` before running.
 
-Full benchmark results should be generated from the official dataset (see below), committed to `evaluation/results/legalbench_rag_mini_results.json`, and reported in the README Benchmarks table. Only those numbers reflect actual retrieval quality.
+The committed mini result file (`evaluation/results/legalbench_rag_mini_results.json`) was produced from 25 queries sampled across ContractNLI, CUAD, MAUD, and PrivacyQA with `corpus_scope: referenced`. These are real retrieval numbers from real legal text. For a statistically stronger claim, run the full 500-query mini with `--corpus-scope all`.

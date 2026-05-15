@@ -1,0 +1,10 @@
+PRIVACY POLICY
+
+ACCOUNT ACCESS
+The application may collect customer account identifiers to authenticate users and prevent unauthorized account access.
+
+DATA SHARING
+The company does not sell biometric identifiers. It may share device metadata with fraud prevention vendors.
+
+RETENTION
+Audit logs are retained for two years unless a legal hold requires longer preservation.

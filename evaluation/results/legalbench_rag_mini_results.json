@@ -1,0 +1,37 @@
+{
+  "benchmark": "LegalBench-RAG compatible retrieval evaluation",
+  "data_root": "data\\legalbenchrag",
+  "benchmark_files": [
+    "data\\legalbenchrag\\benchmarks\\contractnli.json",
+    "data\\legalbenchrag\\benchmarks\\cuad.json",
+    "data\\legalbenchrag\\benchmarks\\maud.json",
+    "data\\legalbenchrag\\benchmarks\\privacy_qa.json"
+  ],
+  "model": "BAAI/bge-base-en-v1.5",
+  "embedding_backend": "sentence_transformers",
+  "query_expansion": {
+    "requested": false,
+    "backend": "disabled_or_no_key"
+  },
+  "chunk_size_chars": 600,
+  "chunk_overlap_chars": 120,
+  "corpus_documents": 3,
+  "corpus_scope": "referenced",
+  "corpus_chunks": 122,
+  "evaluated_at": "2026-05-15T08:04:42.932915+00:00",
+  "runs": {
+    "baseline": {
+      "total_queries": 25,
+      "recall@5": 0.72,
+      "precision@5": 0.184,
+      "recall@10": 0.84,
+      "precision@10": 0.152,
+      "mrr": 0.4254
+    }
+  },
+  "case_details": {},
+  "notes": [
+    "Uses the production SectionAwareChunker and Embedder code paths.",
+    "If embedding_backend is hash_fallback, numbers are smoke-test only and do not represent production BGE quality."
+  ]
+}

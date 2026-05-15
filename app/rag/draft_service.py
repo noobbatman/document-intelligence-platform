@@ -16,6 +16,7 @@ from app.db.models import Document, DocumentChunk, DraftEdit, DraftOutput, Draft
 from app.rag.draft_queries import DOCUMENT_TYPE_QUERIES, DRAFT_QUERIES
 from app.rag.draft_template_loader import load_draft_template
 from app.rag.gemini_client import GeminiClient
+from app.rag.grounding_scorer import overall_score, score, score_sections
 from app.rag.preference_service import PreferenceService
 from app.rag.retrieval_service import RetrievalService, RetrievedChunk
 
@@ -41,6 +42,7 @@ class DraftService:
             evidence_chunk_ids=[],
             generation_version=1,
             word_count=0,
+            overall_grounding_score=None,
             model_id=self.settings.draft_model,
             preferences_applied=[],
         )
@@ -80,13 +82,14 @@ class DraftService:
                 system_prompt=self._system_prompt(draft_type, prefs, examples),
                 user_prompt=self._user_prompt(document, draft_type, structured_fields, chunks),
             )
-            content = self._normalize_content(payload)
+            content = score_sections(self._normalize_content(payload))
             evidence_ids = self._evidence_ids(content, chunks)
 
             draft.content = content
             draft.evidence_chunk_ids = evidence_ids
             draft.status = DraftStatus.draft
             draft.word_count = self._word_count(content)
+            draft.overall_grounding_score = overall_score(content)
             draft.model_id = self.settings.draft_model
             draft.preferences_applied = [pref.id for pref in prefs]
             draft.updated_at = datetime.now(UTC)
@@ -100,6 +103,7 @@ class DraftService:
             return draft
         except Exception as exc:
             draft.status = DraftStatus.failed
+            draft.overall_grounding_score = 0.0
             draft.content = {
                 "sections": [
                     {
@@ -108,6 +112,7 @@ class DraftService:
                         "content": f"[UNSUPPORTED: Draft generation failed: {exc}]",
                         "evidence_chunk_ids": [],
                         "confidence": "unsupported",
+                        "grounding_score": 0.0,
                     }
                 ]
             }
@@ -158,6 +163,7 @@ class DraftService:
             if edited == original:
                 continue
             current["content"] = edited
+            current["grounding_score"] = score(edited)
             edit = DraftEdit(
                 draft_id=draft.id,
                 document_id=draft.document_id,
@@ -179,6 +185,7 @@ class DraftService:
         if edits:
             draft.content = content
             draft.word_count = self._word_count(content)
+            draft.overall_grounding_score = overall_score(content)
             flag_modified(draft, "content")
         self.db.commit()
         for edit in edits:

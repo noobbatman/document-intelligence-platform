@@ -328,17 +328,25 @@ Full configuration: `.env.example`.
 
 The retrieval evaluator is LegalBench-RAG-compatible: it accepts the official `data/corpus` + `data/benchmarks` layout, chunks text with the production `SectionAwareChunker`, embeds with the production BGE wrapper, and reports Recall@K, Precision@K, and MRR. See [`evaluation/README.md`](evaluation/README.md).
 
-The committed result file [`evaluation/results/retrieval_results.json`](evaluation/results/retrieval_results.json) is a **smoke-fixture run only** — 3 queries, 9 chunks, `embedding_backend: hash_fallback`. Perfect scores on a 9-chunk corpus are trivially achievable by any retriever and carry no validity as a benchmark claim. The `expanded` run is identical to baseline because `GEMINI_API_KEY` was absent at run time. Full benchmark runs require `sentence-transformers` installed and intentionally fail without it.
+The committed result file [`evaluation/results/retrieval_results.json`](evaluation/results/retrieval_results.json) is a **smoke-fixture run only** — 3 queries, 9 chunks, `embedding_backend: sentence_transformers`. Perfect scores on a 9-chunk corpus are trivially achievable by any retriever and carry little validity as a benchmark claim. The `expanded` run is identical to baseline because `GEMINI_API_KEY` was absent at run time. Full benchmark runs require `sentence-transformers` installed and intentionally fail without it.
 
 | Dataset | Backend | Variant | Queries | Recall@5 | Recall@10 | MRR |
 |---|---|---|---:|---:|---:|---:|
-| Smoke fixture ⚠ | hash fallback | baseline | 3 | 1.00 | 1.00 | 1.00 |
-| LegalBench-RAG mini | BGE (real) | — | — | _pending_ | _pending_ | _pending_ |
+| Smoke fixture ⚠ | BGE (real) | baseline | 3 | 1.00 | 1.00 | 1.00 |
+| LegalBench-RAG mini | BGE (real) | baseline | 25 | **0.72** | **0.84** | **0.43** |
 
-To run against official LegalBench-RAG data after installing dependencies and downloading the dataset:
+> **LegalBench-RAG mini** — 25 queries sampled across ContractNLI, CUAD, MAUD, and PrivacyQA. Corpus scoped to referenced documents only (`--corpus-scope referenced`); chunk settings 600 chars / 120 overlap; `embedding_backend: sentence_transformers`. Full result: [`evaluation/results/legalbench_rag_mini_results.json`](evaluation/results/legalbench_rag_mini_results.json).
+
+To reproduce:
 
 ```powershell
-.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data --limit 500 --with-expansion --output evaluation\results\legalbench_rag_mini_results.json
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data\legalbenchrag --limit 25 --output evaluation\results\legalbench_rag_mini_results.json
+```
+
+For a full 500-query run with query expansion (requires `GEMINI_API_KEY`):
+
+```powershell
+.\.venv\Scripts\python evaluation\retrieval\run_legalbench_rag.py --data-root data\legalbenchrag --limit 500 --corpus-scope all --with-expansion --output evaluation\results\legalbench_rag_mini_results.json
 ```
 
 ---

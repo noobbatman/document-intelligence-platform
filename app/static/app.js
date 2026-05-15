@@ -25,6 +25,13 @@ function confColor(v) {
   return '#A32D2D';
 }
 
+function groundingColor(v) {
+  if (v == null) return '#9b9b96';
+  if (v > 0.8) return '#3B6D11';
+  if (v >= 0.5) return '#854F0B';
+  return '#A32D2D';
+}
+
 function fieldLabel(k) {
   return String(k).replaceAll('_', ' ');
 }
@@ -72,9 +79,8 @@ function statusBadge(s) {
   return map[s] || 'badge-gray';
 }
 
-document.addEventListener('alpine:init', () => {
-  Alpine.data('docintel', function () {
-    return {
+function createDocintel() {
+  return {
       view: 'dashboard',
       apiKey: localStorage.getItem('di_api_key') || '',
       metrics: null,
@@ -111,6 +117,7 @@ document.addEventListener('alpine:init', () => {
       analyticsLoading: false,
       analyticsError: '',
       analyticsMetrics: null,
+      preferenceMetrics: null,
       ocrDist: null,
       corrStats: null,
       preferences: [],
@@ -140,6 +147,17 @@ document.addEventListener('alpine:init', () => {
         if (v === 'review') this._loadReview();
         if (v === 'analytics') this._loadAnalytics();
         if (v === 'preferences') this._loadPreferences();
+      },
+
+      pageTitle() {
+        if (this.view === 'detail') return this.selDoc ? this.selDoc.filename : 'Document detail';
+        const titles = {
+          dashboard: 'Dashboard',
+          upload: 'Upload documents',
+          documents: 'Documents',
+          preferences: 'Preferences',
+        };
+        return titles[this.view] || this.view;
       },
 
       async _fetch(path, opts = {}) {
@@ -252,6 +270,29 @@ document.addEventListener('alpine:init', () => {
       get filteredPreferences() {
         if (!this.preferenceFilter) return this.preferences;
         return this.preferences.filter(p => p.document_type === this.preferenceFilter);
+      },
+
+      draftSummaryText() {
+        const draft = this.currentDraft;
+        if (!draft) return '';
+        const version = draft.generation_version || this.selectedDraftIndex + 1;
+        const grounded = draft.overall_grounding_score == null
+          ? '—'
+          : fmtConf(draft.overall_grounding_score);
+        return `Draft v${version} · ${draft.word_count || 0} words · ${grounded} grounded · ${draft.status || ''}`;
+      },
+
+      groundingPercent(value) {
+        return value == null ? 0 : Math.round(value * 100);
+      },
+
+      groundingText(value) {
+        return value == null ? '—' : fmtConf(value);
+      },
+
+      averageGroundingText() {
+        const value = this.preferenceMetrics ? this.preferenceMetrics.avg_draft_grounding_score : null;
+        return value == null ? '—' : fmtConf(value);
       },
 
       async openDoc(doc) {
@@ -488,7 +529,12 @@ document.addEventListener('alpine:init', () => {
         this.analyticsLoading = true;
         this.analyticsError = '';
         try {
-          this.preferences = await this._fetch('/preferences') || [];
+          const [prefs, metrics] = await Promise.all([
+            this._fetch('/preferences').catch(() => []),
+            this._fetch('/analytics/metrics/overview').catch(() => null),
+          ]);
+          this.preferences = Array.isArray(prefs) ? prefs : [];
+          this.preferenceMetrics = metrics;
         } catch (e) {
           this.analyticsError = e.message;
         }
@@ -584,8 +630,13 @@ document.addEventListener('alpine:init', () => {
       fmtDate,
       fmtConf,
       confColor,
+      groundingColor,
       formatBytes,
       fmtField: formatFieldValue,
-    };
-  });
+  };
+}
+
+window.docintel = createDocintel;
+document.addEventListener('alpine:init', () => {
+  Alpine.data('docintel', createDocintel);
 });

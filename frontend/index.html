@@ -4,24 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Document Intelligence Platform</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v=grounding1">
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=grounding1"></script>
 </head>
 <body>
-<div class="layout" x-data="docintel">
+<div class="layout" x-data="docintel()">
   <aside class="sidebar">
     <div class="sidebar-logo"><span>DocIntel</span><small>v0.3.0</small></div>
     <div class="nav-section">
       <div class="nav-label">Main</div>
-      <div class="nav-item" :class="{active: view==='dashboard'}" @click="_go('dashboard')"><span class="icon">&#9632;</span><span class="nav-label-text">Dashboard</span></div>
-      <div class="nav-item" :class="{active: view==='upload'}" @click="view='upload'; uploadResults=[];"><span class="icon">&#8679;</span><span class="nav-label-text">Upload</span></div>
-      <div class="nav-item" :class="{active: view==='documents'}" @click="_go('documents')"><span class="icon">&#9783;</span><span class="nav-label-text">Documents</span></div>
+      <div class="nav-item" :class="view==='dashboard' ? 'active' : ''" @click="_go('dashboard')"><span class="icon">&#9632;</span><span class="nav-label-text">Dashboard</span></div>
+      <div class="nav-item" :class="view==='upload' ? 'active' : ''" @click="view='upload'; uploadResults=[];"><span class="icon">&#8679;</span><span class="nav-label-text">Upload</span></div>
+      <div class="nav-item" :class="view==='documents' ? 'active' : ''" @click="_go('documents')"><span class="icon">&#9783;</span><span class="nav-label-text">Documents</span></div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Workflow</div>
-      <div class="nav-item" :class="{active: view==='preferences'}" @click="_go('preferences')">
+      <div class="nav-item" :class="view==='preferences' ? 'active' : ''" @click="_go('preferences')">
         <span class="icon">&#9670;</span><span class="nav-label-text">Preferences</span>
         <span class="nav-badge" x-show="preferences.length > 0" x-text="preferences.length"></span>
       </div>
@@ -34,7 +34,7 @@
 
   <div class="main">
     <div class="topbar">
-      <h1 x-text="view === 'detail' ? (selDoc?.filename || 'Document detail') : ({dashboard:'Dashboard',upload:'Upload documents',documents:'Documents',preferences:'Preferences'}[view] || view)"></h1>
+      <h1 x-text="pageTitle()"></h1>
       <div class="topbar-actions">
         <template x-if="view==='detail'"><button class="btn btn-sm" @click="backToDocuments()">&#8592; Back</button></template>
         <template x-if="view==='documents'"><button class="btn btn-primary btn-sm" @click="view='upload'; uploadResults=[];">&#8679; Upload</button></template>
@@ -49,10 +49,10 @@
         <template x-if="!dashLoading && metrics">
           <div>
             <div class="kpi-grid">
-              <div class="kpi-card"><div class="kpi-label">Total documents</div><div class="kpi-value" x-text="metrics.total_documents ?? 0"></div><div class="kpi-sub" x-text="(metrics.by_status?.completed ?? 0) + ' completed'"></div></div>
-              <div class="kpi-card"><div class="kpi-label">Pending review</div><div class="kpi-value" x-text="metrics.pending_review_tasks ?? 0"></div><div class="kpi-sub">low-confidence fields</div></div>
+              <div class="kpi-card"><div class="kpi-label">Total documents</div><div class="kpi-value" x-text="(metrics.total_documents || 0)"></div><div class="kpi-sub" x-text="((metrics.by_status && metrics.by_status.completed) || 0) + ' completed'"></div></div>
+              <div class="kpi-card"><div class="kpi-label">Pending review</div><div class="kpi-value" x-text="(metrics.pending_review_tasks || 0)"></div><div class="kpi-sub">low-confidence fields</div></div>
               <div class="kpi-card"><div class="kpi-label">Avg confidence</div><div class="kpi-value" x-text="metrics.avg_document_confidence != null ? fmtConf(metrics.avg_document_confidence) : '—'"></div><div class="kpi-sub">across all documents</div></div>
-              <div class="kpi-card"><div class="kpi-label">Total corrections</div><div class="kpi-value" x-text="metrics.total_corrections ?? 0"></div><div class="kpi-sub">active-learning labels</div></div>
+              <div class="kpi-card"><div class="kpi-label">Total corrections</div><div class="kpi-value" x-text="(metrics.total_corrections || 0)"></div><div class="kpi-sub">active-learning labels</div></div>
             </div>
             <div class="grid-2">
               <div class="card">
@@ -79,7 +79,7 @@
                         <td class="truncate" style="max-width:200px" x-text="d.filename"></td>
                         <td><span class="mono text-sm" x-text="d.document_type || '—'"></span></td>
                         <td><span class="badge" :class="sb(d.status)" x-text="d.status"></span></td>
-                        <td><span :style="'color:' + confColor(d.document_confidence); font-weight:500" x-text="d.document_confidence != null ? fmtConf(d.document_confidence) : '—'"></span></td>
+                        <td><span :style="'color:' + confColor(d.document_confidence) + ';font-weight:500'" x-text="d.document_confidence != null ? fmtConf(d.document_confidence) : '—'"></span></td>
                         <td class="text-muted text-sm" x-text="fmtDate(d.created_at)"></td>
                       </tr>
                     </template>
@@ -93,7 +93,7 @@
 
       <div x-show="view==='upload'">
         <div class="card" style="max-width:640px">
-          <div class="upload-zone" :class="{dragover}" @dragover.prevent="dragover=true" @dragleave="dragover=false" @drop="handleDrop($event)" @click="$refs.fileInput.click()">
+          <div class="upload-zone" :class="dragover ? 'dragover' : ''" @dragover.prevent="dragover=true" @dragleave="dragover=false" @drop="handleDrop($event)" @click="$refs.fileInput.click()">
             <div class="zone-icon">&#8679;</div><p>Drop files here or click to browse</p><small>Supports PDF, JPEG, PNG, TIFF, WebP</small>
           </div>
           <input type="file" x-ref="fileInput" multiple accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.webp" style="display:none" @change="handlePick($event)">
@@ -105,7 +105,7 @@
         <div class="mt-16" x-show="uploadResults.length">
           <div class="card-title mb-8">Upload results</div>
           <div style="display:flex;flex-direction:column;gap:6px">
-            <template x-for="r in uploadResults" :key="r.name"><div class="upload-result" :class="r.ok ? 'ok' : 'err'"><span x-text="r.ok ? 'OK' : 'ERR'"></span><span x-text="r.name" class="truncate" style="flex:1"></span><span class="text-sm" x-text="r.ok ? ('Task: ' + r.taskId?.slice(0,8)) : r.error"></span></div></template>
+            <template x-for="r in uploadResults" :key="r.name"><div class="upload-result" :class="r.ok ? 'ok' : 'err'"><span x-text="r.ok ? 'OK' : 'ERR'"></span><span x-text="r.name" class="truncate" style="flex:1"></span><span class="text-sm" x-text="r.ok ? ('Task: ' + (r.taskId ? r.taskId.slice(0,8) : '')) : r.error"></span></div></template>
           </div>
         </div>
       </div>
@@ -160,16 +160,16 @@
             <div class="detail-summary">
               <div>
                 <div class="flex gap-8 items-center mb-8">
-                  <span class="badge" :class="sb(selDoc.status)" x-text="selDoc.status?.replace(/_/g,' ')"></span>
+                  <span class="badge" :class="sb(selDoc.status)" x-text="(selDoc.status || '').replace(/_/g,' ')"></span>
                   <span class="stat-pill mono text-sm" x-text="selDoc.document_type || 'unknown'"></span>
                   <span class="stat-pill" x-text="fmtDate(selDoc.created_at)"></span>
                 </div>
                 <div class="text-sm text-muted mono" x-text="selDoc.id"></div>
               </div>
               <div class="detail-tabs">
-                <button class="tab-btn" :class="{active: detailTab==='drafts'}" @click="detailTab='drafts'">Drafts</button>
-                <button class="tab-btn" :class="{active: detailTab==='extraction'}" @click="detailTab='extraction'">Extraction</button>
-                <button class="tab-btn" :class="{active: detailTab==='evidence'}" @click="detailTab='evidence'; if (currentDraft) _loadDraftEvidence(currentDraft)">Evidence</button>
+                <button class="tab-btn" :class="detailTab==='drafts' ? 'active' : ''" @click="detailTab='drafts'">Drafts</button>
+                <button class="tab-btn" :class="detailTab==='extraction' ? 'active' : ''" @click="detailTab='extraction'">Extraction</button>
+                <button class="tab-btn" :class="detailTab==='evidence' ? 'active' : ''" @click="detailTab='evidence'; if (currentDraft) _loadDraftEvidence(currentDraft)">Evidence</button>
               </div>
             </div>
 
@@ -189,7 +189,7 @@
                 </div>
                 <div class="flex gap-8 items-center" x-show="drafts.length">
                   <button class="btn btn-sm" @click="selectDraft(selectedDraftIndex - 1)" :disabled="selectedDraftIndex === 0">&#9664;</button>
-                  <span class="text-sm text-muted" x-text="'Draft v' + (currentDraft?.generation_version || selectedDraftIndex + 1) + ' · ' + (currentDraft?.word_count || 0) + ' words · ' + (currentDraft?.status || '')"></span>
+                  <span class="text-sm text-muted" x-text="draftSummaryText()"></span>
                   <button class="btn btn-sm" @click="selectDraft(selectedDraftIndex + 1)" :disabled="selectedDraftIndex >= drafts.length - 1">&#9654;</button>
                 </div>
               </div>
@@ -200,14 +200,21 @@
               </template>
               <template x-if="!draftLoading && currentDraft">
                 <div class="draft-shell">
-                  <template x-for="section in (currentDraft.content?.sections || [])" :key="section.key">
-                    <section class="draft-section" :class="{unsupported: isUnsupported(section)}">
+                  <template x-for="section in ((currentDraft.content && currentDraft.content.sections) || [])" :key="section.key">
+                    <section class="draft-section" :class="isUnsupported(section) ? 'unsupported' : ''">
                       <div class="draft-section-head">
                         <h2 x-text="section.title"></h2>
-                        <span class="badge" :class="confidenceClass(section.confidence)" x-text="section.confidence || 'medium'"></span>
+                        <div class="section-metrics">
+                          <span class="badge" :class="confidenceClass(section.confidence)" x-text="section.confidence || 'medium'"></span>
+                          <div class="grounding-meter" :title="'Grounding: ' + groundingText(section.grounding_score)">
+                            <span>Grounding</span>
+                            <div class="mini-track"><div class="mini-fill" :style="'width:' + groundingPercent(section.grounding_score) + '%;background:' + groundingColor(section.grounding_score)"></div></div>
+                            <strong :style="'color:' + groundingColor(section.grounding_score)" x-text="groundingText(section.grounding_score)"></strong>
+                          </div>
+                        </div>
                       </div>
                       <p class="draft-content" x-text="section.content"></p>
-                      <div class="evidence-list" x-show="section.evidence_chunk_ids?.length">
+                      <div class="evidence-list" x-show="section.evidence_chunk_ids && section.evidence_chunk_ids.length">
                         <div class="text-sm text-muted mb-8" x-text="sectionEvidence(currentDraft, section).length + ' evidence chunk(s)'"></div>
                         <template x-for="chunk in sectionEvidence(currentDraft, section)" :key="chunk.id">
                           <div class="evidence-card">
@@ -235,14 +242,14 @@
               <div class="grid-2" style="align-items:start">
                 <div class="card">
                   <div class="card-title">Extracted fields</div>
-                  <template x-for="[k, v] in Object.entries(selResult?.fields || {})" :key="k">
+                  <template x-for="[k, v] in Object.entries((selResult && selResult.fields) || {})" :key="k">
                     <div class="field-row"><span class="field-key" x-text="k.replace(/_/g,' ')"></span><span class="field-val mono" x-text="fmtField(v)"></span></div>
                   </template>
                 </div>
                 <div class="card">
                   <div class="card-title">Field confidence</div>
                   <div style="display:flex;flex-direction:column;gap:8px">
-                    <template x-for="fc in (selResult?.field_confidences || [])" :key="fc.name">
+                    <template x-for="fc in ((selResult && selResult.field_confidences) || [])" :key="fc.name">
                       <div>
                         <div class="flex items-center gap-8 mb-12" style="margin-bottom:4px"><span class="text-sm" style="min-width:120px" x-text="fc.name.replace(/_/g,' ')"></span></div>
                         <div class="conf-bar"><div class="conf-track"><div class="conf-fill" :style="'width:' + Math.round(fc.confidence*100) + '%;background:' + confColor(fc.confidence)"></div></div><span class="conf-label" :style="'color:' + confColor(fc.confidence)" x-text="fmtConf(fc.confidence)"></span></div>
@@ -291,6 +298,11 @@
                 <option value="unknown">unknown</option>
               </select>
             </div>
+            <div class="card mb-12">
+              <div class="kpi-label">Average grounding score across reviewed drafts</div>
+              <div class="kpi-value" x-text="averageGroundingText()"></div>
+              <div class="kpi-sub">weighted section citation coverage</div>
+            </div>
             <div style="display:flex;flex-direction:column;gap:12px" x-show="filteredPreferences.length">
               <template x-for="p in filteredPreferences" :key="p.id">
                 <div class="preference-card">
@@ -302,17 +314,17 @@
                   </div>
                   <div class="score-row">
                     <span class="text-sm text-muted">Effectiveness</span>
-                    <div class="score-track"><div class="score-fill" :style="'width:' + Math.round((p.effectiveness_score ?? 0) * 100) + '%'"></div></div>
+                    <div class="score-track"><div class="score-fill" :style="'width:' + Math.round((p.effectiveness_score || 0) * 100) + '%'"></div></div>
                     <span class="text-sm mono" x-text="p.effectiveness_score != null ? fmtConf(p.effectiveness_score) : '—'"></span>
                   </div>
                   <details class="mt-12" x-show="p.source_edit">
                     <summary class="text-sm text-muted">Source edit</summary>
                     <div class="snippet mt-12">
-                      <div class="mono" x-text="'Section: ' + (p.source_edit?.section_key || 'unknown')"></div>
+                      <div class="mono" x-text="'Section: ' + ((p.source_edit && p.source_edit.section_key) || 'unknown')"></div>
                       <div class="mt-8"><strong>Before:</strong></div>
-                      <div x-text="p.source_edit?.original_content || '—'"></div>
+                      <div x-text="(p.source_edit && p.source_edit.original_content) || '—'"></div>
                       <div class="mt-8"><strong>After:</strong></div>
-                      <div x-text="p.source_edit?.edited_content || '—'"></div>
+                      <div x-text="(p.source_edit && p.source_edit.edited_content) || '—'"></div>
                     </div>
                   </details>
                   <button class="btn btn-sm btn-danger mt-12" @click="deletePreference(p.id)">Delete</button>
