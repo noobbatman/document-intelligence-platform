@@ -8,6 +8,7 @@ from typing import Any
 
 from app.classification.hybrid_classifier import HybridDocumentClassifier
 from app.core.config import get_settings
+from app.extraction.defined_terms import extract_defined_terms
 from app.extraction.factory import get_extractor
 from app.ocr.factory import get_ocr_provider
 from app.pipelines.confidence import ConfidenceScorer
@@ -50,6 +51,11 @@ class DocumentPipeline:
         detected_document_type = fields.pop("detected_type", None)
         if detected_document_type:
             extracted.document_type = detected_document_type
+        defined_terms = extract_defined_terms(
+            normalized_text,
+            fields=fields,
+            existing=extracted.defined_terms,
+        )
 
         # 6. Field validation
         validation_results = run_validators(extracted.document_type, fields)
@@ -97,6 +103,7 @@ class DocumentPipeline:
             "schema_version": "2.0",
             "source_file": Path(path).name,
             "fields": fields,
+            "defined_terms": defined_terms,
             "entities": extracted.entities,
             "tables": extracted.tables,
             "field_confidences": [fc.model_dump() for fc in field_confidences],
@@ -114,11 +121,13 @@ class DocumentPipeline:
             "raw_payload": {
                 "classification": asdict(classification),
                 "fields": fields,
+                "defined_terms": defined_terms,
                 "entities": extracted.entities,
                 "tables": extracted.tables,
             },
             "normalized_payload": {
                 "fields": fields,
+                "defined_terms": defined_terms,
                 "entities": extracted.entities,
                 "tables": extracted.tables,
             },
@@ -128,6 +137,7 @@ class DocumentPipeline:
                 "required_fields": required_fields,
                 "extraction_mode": extracted.metadata.get("extraction_mode"),
                 "pipeline_version": self.settings.pipeline_version,
+                "defined_terms_count": len(defined_terms),
                 "validation_results": validation_results,
             },
             "low_confidence_fields": low_conf_fields,

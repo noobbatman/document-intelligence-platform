@@ -295,6 +295,11 @@ function createDocintel() {
         return value == null ? '—' : fmtConf(value);
       },
 
+      definedTerms() {
+        const terms = this.selResult?.defined_terms || this.selResult?.export_payload?.defined_terms || {};
+        return Object.entries(terms).sort((a, b) => a[0].localeCompare(b[0]));
+      },
+
       async openDoc(doc) {
         this.view = 'detail';
         this.detailTab = 'drafts';

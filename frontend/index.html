@@ -245,6 +245,15 @@
                   <template x-for="[k, v] in Object.entries((selResult && selResult.fields) || {})" :key="k">
                     <div class="field-row"><span class="field-key" x-text="k.replace(/_/g,' ')"></span><span class="field-val mono" x-text="fmtField(v)"></span></div>
                   </template>
+                  <div class="defined-terms" x-show="definedTerms().length">
+                    <div class="card-title mt-16">Defined Terms</div>
+                    <template x-for="[term, definition] in definedTerms()" :key="term">
+                      <div class="term-row">
+                        <span class="term-key" x-text="'&quot;' + term + '&quot;'"></span>
+                        <span class="term-val" x-text="definition"></span>
+                      </div>
+                    </template>
+                  </div>
                 </div>
                 <div class="card">
                   <div class="card-title">Field confidence</div>

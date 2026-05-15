@@ -11,6 +11,11 @@ from app.db.models import (
     DraftPreference,
     ExtractionResult,
 )
+from app.extraction.defined_terms import (
+    annotate_defined_terms,
+    extract_defined_terms,
+    format_defined_terms_block,
+)
 from app.rag.chunker import SectionAwareChunker
 from app.rag.draft_service import DraftService
 from app.rag.embedder import Embedder
@@ -115,6 +120,40 @@ def test_embedding_and_retrieval_round_trip(db_session):
     assert count >= 1
     assert results
     assert any("pay Acme" in chunk.text for chunk in results)
+
+
+def test_defined_terms_extract_common_legal_patterns():
+    text = (
+        'Abercrombie & Fitch Management Co. (the "Company") entered this Agreement. '
+        '"Effective Date" means May 10, 2017. '
+        'As used herein, "Confidential Information" means non-public business information.'
+    )
+
+    terms = extract_defined_terms(text, confirm_with_llm=False)
+
+    assert terms["Company"] == "Abercrombie & Fitch Management Co"
+    assert terms["Effective Date"] == "May 10, 2017"
+    assert terms["Confidential Information"] == "non-public business information"
+
+
+def test_defined_terms_annotate_chunks_for_embeddings():
+    text = "The Company shall preserve Confidential Information."
+    terms = {
+        "Company": "Abercrombie & Fitch Management Co.",
+        "Confidential Information": "non-public business information",
+    }
+
+    annotated = annotate_defined_terms(text, terms)
+
+    assert "Company [Abercrombie & Fitch Management Co]" in annotated
+    assert "Confidential Information [non-public business information]" in annotated
+
+
+def test_defined_terms_prompt_block():
+    block = format_defined_terms_block({"LCU": "Landmark Credit Union"})
+
+    assert "DEFINED TERMS IN THIS DOCUMENT" in block
+    assert '"LCU" = Landmark Credit Union' in block
 
 
 def test_bge_prefixes_are_query_only(monkeypatch):

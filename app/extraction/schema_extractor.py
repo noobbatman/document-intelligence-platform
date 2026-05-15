@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.extraction.base import ExtractionOutput, Extractor
+from app.extraction.defined_terms import extract_defined_terms
 from app.extraction.entities import extract_entities
 from app.ocr.base import OCRResult
 from app.rag.gemini_client import GeminiClient
@@ -41,6 +42,7 @@ class SchemaDrivenExtractor(Extractor):
             else None
             for name, value in fields.items()
         }
+        defined_terms = extract_defined_terms(text, fields=fields, confirm_with_llm=False)
         return ExtractionOutput(
             document_type=str(self.schema.get("document_type") or self.document_type),
             fields=fields,
@@ -57,7 +59,9 @@ class SchemaDrivenExtractor(Extractor):
                 if self.document_type == "unknown"
                 else "schema_regex_llm",
                 "schema_path": str(SCHEMA_DIR / f"{self.document_type}.yaml"),
+                "defined_terms_count": len(defined_terms),
             },
+            defined_terms=defined_terms,
         )
 
     def _regex_prepass(self, text: str) -> dict[str, Any]:

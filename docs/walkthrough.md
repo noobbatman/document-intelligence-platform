@@ -259,6 +259,46 @@ A Celery task fired within seconds. Gemini read the diff and extracted:
 > demonstrating the geographic connection between the defendant's operations or the
 > events at issue and the judicial district, rather than citing the venue statute alone."*
 
+---
+
+## 5. Defined-Term Resolution
+
+Legal documents often compress meaning into defined terms. The platform extracts those
+terms before chunking, uses them during retrieval, and passes them into draft generation
+as a reference block.
+
+For the Barker complaint, the defined-term pass produced representative mappings like:
+
+```json
+{
+  "Plaintiff": "James A. Barker III",
+  "LCU": "Landmark Credit Union",
+  "Subpoena": "the April 29, 2015 subpoena for customer financial records"
+}
+```
+
+During embedding, chunks are annotated with compact labels so semantic search can match
+short-form references to their canonical legal meaning:
+
+```text
+Plaintiff [James A. Barker III] alleges that LCU [Landmark Credit Union]
+accepted the Subpoena [the April 29, 2015 subpoena for customer financial records]
+before valid legal process was confirmed.
+```
+
+The same terms are injected into the draft prompt:
+
+```text
+DEFINED TERMS IN THIS DOCUMENT:
+- "LCU" = Landmark Credit Union
+- "Plaintiff" = James A. Barker III
+- "Subpoena" = the April 29, 2015 subpoena for customer financial records
+```
+
+This reduces entity-substitution risk: a draft section can introduce "Landmark Credit
+Union" on first use and then safely use "LCU" or "the Credit Union" afterward without
+confusing the party with a generic financial institution.
+
 Scoped to `legal_complaint`. Stored as a `DraftPreference` with initial
 `effectiveness_score = 0.50`.
 

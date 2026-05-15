@@ -13,6 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import get_settings
 from app.db.models import Document, DocumentChunk, DraftEdit, DraftOutput, DraftStatus
+from app.extraction.defined_terms import format_defined_terms_block
 from app.rag.draft_queries import DOCUMENT_TYPE_QUERIES, DRAFT_QUERIES
 from app.rag.draft_template_loader import load_draft_template
 from app.rag.gemini_client import GeminiClient
@@ -73,14 +74,16 @@ class DraftService:
                 document_type=document.document_type or "unknown",
                 limit=2,
             )
-            structured_fields = (
-                document.extraction_result.export_payload.get("fields", {})
-                if document.extraction_result
-                else {}
+            export_payload = (
+                document.extraction_result.export_payload if document.extraction_result else {}
             )
+            structured_fields = export_payload.get("fields", {})
+            defined_terms = export_payload.get("defined_terms", {})
             payload = self.gemini.generate_json(
                 system_prompt=self._system_prompt(draft_type, prefs, examples),
-                user_prompt=self._user_prompt(document, draft_type, structured_fields, chunks),
+                user_prompt=self._user_prompt(
+                    document, draft_type, structured_fields, chunks, defined_terms
+                ),
             )
             content = score_sections(self._normalize_content(payload))
             evidence_ids = self._evidence_ids(content, chunks)
@@ -369,6 +372,7 @@ Respond in JSON with this structure:
         draft_type: str,
         structured_fields: dict[str, Any],
         chunks: list[RetrievedChunk],
+        defined_terms: dict[str, str] | None = None,
     ) -> str:
         chunk_block = "\n---\n".join(
             (
@@ -383,10 +387,12 @@ Respond in JSON with this structure:
         template_instructions = self._template_instructions(
             draft_type, document.document_type or "unknown"
         )
+        defined_terms_block = format_defined_terms_block(defined_terms)
         return (
             f"DOCUMENT TYPE: {document.document_type or 'unknown'}\n"
             f"DRAFT DATE: {self._draft_date()}\n"
             f"STRUCTURED FIELDS EXTRACTED: {json.dumps(structured_fields, default=str)}\n\n"
+            f"{defined_terms_block}\n\n"
             f"{draft_instructions}\n\n"
             f"{template_instructions}\n\n"
             f"SOURCE CHUNKS (ordered by relevance):\n---\n{chunk_block}\n---\n\n"

@@ -1,0 +1,10 @@
+{
+  "document_type": "legal_complaint",
+  "defined_terms": {
+    "Plaintiff": "James A. Barker III",
+    "LCU": "Landmark Credit Union",
+    "Subpoena": "the April 29, 2015 subpoena for customer financial records"
+  },
+  "annotated_chunk_example": "Plaintiff [James A. Barker III] alleges that LCU [Landmark Credit Union] accepted the Subpoena [the April 29, 2015 subpoena for customer financial records] before valid legal process was confirmed.",
+  "draft_prompt_block_example": "DEFINED TERMS IN THIS DOCUMENT:\n- \"LCU\" = Landmark Credit Union\n- \"Plaintiff\" = James A. Barker III\n- \"Subpoena\" = the April 29, 2015 subpoena for customer financial records"
+}
