@@ -19,6 +19,26 @@ def test_relevant_path_filter_includes_code_config_and_env_files() -> None:
     assert review.is_relevant_path(".env.example") is True
     assert review.is_relevant_path("Dockerfile") is True
     assert review.is_relevant_path("docs/guide.md") is False
+    assert review.is_reviewable_path("tests/test_api.py") is False
+    assert review.is_reviewable_path("docs/security.md") is False
+    assert review.is_reviewable_path("app/api/routes.py") is True
+
+
+def test_select_review_patches_skips_tests_and_prioritizes_high_risk_paths() -> None:
+    selected = review.select_review_patches(
+        [
+            ("tests/test_api.py", "test patch"),
+            ("frontend/app.tsx", "frontend patch"),
+            ("app/services/payments.py", "service patch"),
+            ("app/api/routes.py", "api patch"),
+        ]
+    )
+
+    assert selected == [
+        ("app/api/routes.py", "api patch"),
+        ("app/services/payments.py", "service patch"),
+        ("frontend/app.tsx", "frontend patch"),
+    ]
 
 
 def test_split_patches_and_changed_lines_track_new_file_lines() -> None:
@@ -56,6 +76,14 @@ def test_truncate_diff_stops_at_budget() -> None:
     )
 
     assert text == "xxxxxxxxxx"
+    assert truncated is True
+
+
+def test_truncate_diff_keeps_first_patch_when_it_exceeds_budget() -> None:
+    text, truncated = review.truncate_diff([("a.py", "x" * 20)], max_chars=8)
+
+    assert text.startswith("xxxxxxxx")
+    assert "GuardianCI truncated" in text
     assert truncated is True
 
 
@@ -150,3 +178,9 @@ def test_no_finding_body_is_non_blocking() -> None:
     body = review.render_review_body([], [], truncated=False)
 
     assert "no blocking security findings" in body
+
+
+def test_quota_error_detection_matches_common_provider_messages() -> None:
+    assert review.is_quota_or_rate_limit_error(RuntimeError("429 TooManyRequests")) is True
+    assert review.is_quota_or_rate_limit_error(RuntimeError("RESOURCE_EXHAUSTED quota")) is True
+    assert review.is_quota_or_rate_limit_error(RuntimeError("network down")) is False

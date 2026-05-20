@@ -16,9 +16,24 @@ from typing import Any
 import requests
 
 DEFAULT_MODEL = "gemini-2.0-flash"
-MAX_DIFF_CHARS = 32000
+MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 ALLOWED_SEVERITIES = {"CRITICAL", "WARN", "INFO"}
+SKIPPED_REVIEW_PREFIXES = (
+    "docs/",
+    "tests/",
+    "sample_docs/",
+    "evaluation/results/",
+    "data/",
+)
+HIGH_RISK_PREFIXES = (
+    ".github/workflows/",
+    "app/api/",
+    "app/core/",
+    "app/db/",
+    "app/services/",
+    "app/workers/",
+)
 RELEVANT_SUFFIXES = {
     ".py",
     ".js",
@@ -74,7 +89,7 @@ def main() -> int:
     try:
         diff_text = collect_diff(args.base_ref)
         file_patches = split_file_patches(diff_text)
-        relevant_patches = [(path, patch) for path, patch in file_patches if is_relevant_path(path)]
+        relevant_patches = select_review_patches(file_patches)
         changed_lines = changed_new_lines(relevant_patches)
         review_diff, truncated = truncate_diff(relevant_patches, args.max_diff_chars)
 
@@ -101,6 +116,20 @@ def main() -> int:
         )
         return 0
     except Exception as exc:
+        if is_quota_or_rate_limit_error(exc):
+            post_review(
+                context,
+                body=(
+                    "GuardianCI Gemini review was skipped because Gemini returned a quota or "
+                    "rate-limit error. The pipeline is continuing safely.\n\n"
+                    f"Provider error: `{exc}`\n\n"
+                    "Use a paid Gemini quota, reduce PR size, or rerun after quota resets."
+                ),
+                event="COMMENT",
+                comments=[],
+            )
+            print(f"GuardianCI skipped Gemini review due to quota/rate limit: {exc}")
+            return 0
         post_review(
             context,
             body=f"GuardianCI Gemini review failed before completion: `{exc}`",
@@ -189,6 +218,32 @@ def is_relevant_path(path: str) -> bool:
     return any(lowered.endswith(suffix) for suffix in RELEVANT_SUFFIXES)
 
 
+def is_reviewable_path(path: str) -> bool:
+    lowered = path.lower()
+    if any(lowered.startswith(prefix) for prefix in SKIPPED_REVIEW_PREFIXES):
+        return False
+    return is_relevant_path(path)
+
+
+def review_priority(path: str) -> tuple[int, str]:
+    lowered = path.lower()
+    name = Path(path).name
+    if any(lowered.startswith(prefix) for prefix in HIGH_RISK_PREFIXES):
+        return (0, path)
+    if lowered.startswith("app/"):
+        return (1, path)
+    if name in RELEVANT_FILENAMES or ".env" in name:
+        return (2, path)
+    return (3, path)
+
+
+def select_review_patches(file_patches: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    return sorted(
+        [(path, patch) for path, patch in file_patches if is_reviewable_path(path)],
+        key=lambda item: review_priority(item[0]),
+    )
+
+
 def truncate_diff(patches: list[tuple[str, str]], max_chars: int) -> tuple[str, bool]:
     chunks: list[str] = []
     total = 0
@@ -196,6 +251,8 @@ def truncate_diff(patches: list[tuple[str, str]], max_chars: int) -> tuple[str, 
     for _path, patch in patches:
         addition = len(patch) + 2
         if total + addition > max_chars:
+            if not chunks:
+                chunks.append(patch[:max_chars] + "\n... [GuardianCI truncated this file diff]")
             truncated = True
             break
         chunks.append(patch)
@@ -401,6 +458,21 @@ def render_review_body(
         body += "\nSome Gemini findings were ignored because they failed schema validation:\n"
         body += "\n".join(f"- {error}" for error in validation_errors[:10])
     return body
+
+
+def is_quota_or_rate_limit_error(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(
+        marker in text
+        for marker in (
+            "429",
+            "too many requests",
+            "resource_exhausted",
+            "quota",
+            "rate limit",
+            "ratelimit",
+        )
+    )
 
 
 def inline_comments(
