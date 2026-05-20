@@ -401,6 +401,153 @@ def test_quota_error_detection_matches_common_provider_messages() -> None:
     assert review.is_quota_or_rate_limit_error(RuntimeError("network down")) is False
 
 
+def test_validate_fix_payload_strips_code_fences() -> None:
+    payload = {"replacement": "```python\nsafe_value = os.getenv('API_KEY')\n```"}
+
+    assert review.validate_fix_payload(payload) == "safe_value = os.getenv('API_KEY')"
+
+
+def test_apply_line_replacement_replaces_exact_range(tmp_path: Path) -> None:
+    target = tmp_path / "demo.py"
+    target.write_text("first = True\nbad = True\nlast = True\n", encoding="utf-8")
+
+    review.apply_line_replacement(target, 2, 2, "good = True")
+
+    assert target.read_text(encoding="utf-8") == "first = True\ngood = True\nlast = True\n"
+
+
+def test_auto_fix_branch_name_is_stable_and_sanitized() -> None:
+    branch = review.auto_fix_branch_name(
+        "ABCDEF123456",
+        "JWT code appears to allow or reference the `alg=none` bypass pattern.",
+    )
+
+    assert branch.startswith("guardianCI/fix-abcdef12-jwt-code-appears")
+    assert "`" not in branch
+
+
+def test_auto_fix_pr_body_lists_original_pr_findings_and_files() -> None:
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=10,
+        line_end=10,
+        severity="CRITICAL",
+        issue="SQL injection.",
+        suggested_fix="Use bind parameters.",
+    )
+
+    body = review.auto_fix_pr_body(
+        {"pr_number": 7},
+        [finding],
+        ["app/api.py"],
+        needs_human_review=True,
+    )
+
+    assert "original PR #7" in body
+    assert "`app/api.py:10` SQL injection." in body
+    assert "`needs-human-review`" in body
+
+
+def test_create_draft_fix_pr_posts_expected_payload(monkeypatch) -> None:
+    calls = []
+
+    class FakeResponse:
+        status_code = 201
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return {"html_url": "https://github.test/pr/10", "number": 10}
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=10,
+        line_end=10,
+        severity="CRITICAL",
+        issue="SQL injection.",
+        suggested_fix="Use bind parameters.",
+    )
+    monkeypatch.setattr(review.requests, "post", fake_post)
+
+    pr_url, pr_number = review.create_draft_fix_pr(
+        context={
+            "token": "token",
+            "repo": "owner/repo",
+            "pr_number": 7,
+            "head_ref": "feature-branch",
+        },
+        branch="guardianCI/fix-abc-sql-injection",
+        findings=[finding],
+        fixed_files=["app/api.py"],
+        needs_human_review=False,
+    )
+
+    assert pr_url == "https://github.test/pr/10"
+    assert pr_number == 10
+    assert calls[0]["json"]["draft"] is True
+    assert calls[0]["json"]["base"] == "feature-branch"
+    assert calls[0]["json"]["head"] == "guardianCI/fix-abc-sql-injection"
+
+
+def test_post_auto_fix_comment_links_fix_pr(monkeypatch) -> None:
+    calls = []
+
+    class FakeResponse:
+        status_code = 201
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setattr(review.requests, "post", fake_post)
+
+    review.post_auto_fix_comment(
+        {"token": "token", "repo": "owner/repo", "pr_number": 7},
+        review.AutoFixResult(
+            branch="guardianCI/fix-abc",
+            pr_url="https://github.test/pr/10",
+            fixed_files=("app/api.py",),
+            needs_human_review=False,
+        ),
+    )
+
+    assert calls[0]["url"].endswith("/repos/owner/repo/issues/7/comments")
+    assert "https://github.test/pr/10" in calls[0]["json"]["body"]
+
+
+def test_request_fix_pr_reviewer_posts_requested_reviewer(monkeypatch) -> None:
+    calls = []
+
+    class FakeResponse:
+        status_code = 201
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setattr(review.requests, "post", fake_post)
+
+    review.request_fix_pr_reviewer(
+        {"token": "token", "repo": "owner/repo"},
+        pr_number=10,
+        reviewer="noobbatman",
+    )
+
+    assert calls[0]["url"].endswith("/repos/owner/repo/pulls/10/requested_reviewers")
+    assert calls[0]["json"] == {"reviewers": ["noobbatman"]}
+
+
 def test_post_review_logs_and_retries_body_only_on_inline_comment_rejection(
     monkeypatch, capsys
 ) -> None:

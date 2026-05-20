@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
 
@@ -177,6 +177,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_MODEL: gemini-2.0-flash
           GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'false' }}
+          GUARDIANCI_AUTOFIX_ENABLED: ${{ vars.GUARDIANCI_AUTOFIX_ENABLED || 'false' }}
         run: python scripts/guardianci_ai_review.py
 
   deploy:
