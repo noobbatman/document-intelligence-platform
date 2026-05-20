@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import warnings
 from functools import lru_cache
 from pathlib import Path
@@ -146,15 +145,15 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_warnings(self) -> Settings:
-        if self.llm_extraction_enabled and not os.environ.get("ANTHROPIC_API_KEY"):
+        if self.llm_extraction_enabled and not self.gemini_api_key:
             warnings.warn(
-                "LLM_EXTRACTION_ENABLED=true but ANTHROPIC_API_KEY is not set. "
+                "LLM_EXTRACTION_ENABLED=true but GEMINI_API_KEY is not set. "
                 "LLM fallback extraction will be skipped.",
                 stacklevel=2,
             )
-        if self.llm_unknown_extraction_enabled and not os.environ.get("ANTHROPIC_API_KEY"):
+        if self.llm_unknown_extraction_enabled and not self.gemini_api_key:
             warnings.warn(
-                "LLM_UNKNOWN_EXTRACTION_ENABLED=true but ANTHROPIC_API_KEY is not set. "
+                "LLM_UNKNOWN_EXTRACTION_ENABLED=true but GEMINI_API_KEY is not set. "
                 "Unknown-document LLM extraction will be skipped.",
                 stacklevel=2,
             )
