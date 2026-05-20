@@ -99,6 +99,8 @@ def test_local_security_findings_detects_obvious_critical_patterns() -> None:
     assert severities.count("WARN") == 2
     assert "hardcoded secret" in issues
     assert "SQL injection" in issues
+    assert all(finding.frameworks for finding in findings)
+    assert findings[0].remediation_urgency == "before-merge"
 
 
 def test_merge_findings_deduplicates_matching_items() -> None:
@@ -151,6 +153,8 @@ def test_validate_findings_accepts_good_items_and_reports_bad_items() -> None:
                 "severity": "critical",
                 "issue": "Endpoint accepts tenant_id from the body without authorization.",
                 "suggested_fix": "Derive tenant_id from the authenticated principal.",
+                "frameworks": ["SOC 2 CC6.1", "GDPR Art. 32"],
+                "remediation_urgency": "before-merge",
             },
             {
                 "file": "docs/readme.md",
@@ -159,6 +163,8 @@ def test_validate_findings_accepts_good_items_and_reports_bad_items() -> None:
                 "severity": "WARN",
                 "issue": "Outside diff.",
                 "suggested_fix": "No-op.",
+                "frameworks": ["SOC 2 CC7.2"],
+                "remediation_urgency": "within-sprint",
             },
             {"file": "app/api.py", "severity": "BAD"},
         ]
@@ -169,7 +175,81 @@ def test_validate_findings_accepts_good_items_and_reports_bad_items() -> None:
     assert len(findings) == 1
     assert findings[0].severity == "CRITICAL"
     assert findings[0].is_critical is True
+    assert findings[0].frameworks == ("SOC 2 CC6.1", "GDPR Art. 32")
+    assert findings[0].remediation_urgency == "before-merge"
     assert len(errors) == 2
+
+
+def test_validate_findings_defaults_optional_compliance_fields() -> None:
+    payload = {
+        "findings": [
+            {
+                "file": "app/api.py",
+                "line_start": 42,
+                "severity": "WARN",
+                "issue": "Missing tenant check.",
+                "suggested_fix": "Derive tenant from the authenticated principal.",
+            }
+        ]
+    }
+
+    findings, errors = review.validate_findings(payload, {"app/api.py": {42}})
+
+    assert errors == []
+    assert len(findings) == 1
+    assert findings[0].line_end == 42
+    assert findings[0].frameworks == ()
+    assert findings[0].remediation_urgency == "within-sprint"
+
+
+def test_validate_findings_rejects_explicit_invalid_line_end() -> None:
+    payload = {
+        "findings": [
+            {
+                "file": "app/api.py",
+                "line_start": 42,
+                "line_end": 0,
+                "severity": "WARN",
+                "issue": "Missing tenant check.",
+                "suggested_fix": "Derive tenant from the authenticated principal.",
+            }
+        ]
+    }
+
+    findings, errors = review.validate_findings(payload, {"app/api.py": {42}})
+
+    assert findings == []
+    assert any("invalid line range: 42-0" in error for error in errors)
+
+
+def test_validate_findings_rejects_bad_phase_3_fields() -> None:
+    payload = {
+        "findings": [
+            {
+                "file": "app/api.py",
+                "line_start": 42,
+                "line_end": 42,
+                "severity": "WARN",
+                "issue": "TLS verification disabled.",
+                "suggested_fix": "Remove verify=False.",
+                "frameworks": "SOC 2 CC6.7",
+                "remediation_urgency": "soon",
+            }
+        ]
+    }
+
+    findings, errors = review.validate_findings(payload, {"app/api.py": {42}})
+
+    assert findings == []
+    assert "frameworks must be a list" in errors[0]
+
+
+def test_normalize_frameworks_skips_non_strings_and_deduplicates() -> None:
+    frameworks = review.normalize_frameworks(
+        [" SOC 2 CC6.1 ", None, "GDPR Art. 32", "SOC 2 CC6.1", "", 123]
+    )
+
+    assert frameworks == ("SOC 2 CC6.1", "GDPR Art. 32")
 
 
 def test_inline_comments_only_include_changed_lines() -> None:
@@ -181,6 +261,8 @@ def test_inline_comments_only_include_changed_lines() -> None:
             severity="WARN",
             issue="PII is logged.",
             suggested_fix="Remove the log line.",
+            frameworks=("SOC 2 CC7.2", "GDPR Art. 32"),
+            remediation_urgency="within-sprint",
         ),
         review.Finding(
             file="app/api.py",
@@ -197,6 +279,8 @@ def test_inline_comments_only_include_changed_lines() -> None:
     assert len(comments) == 1
     assert comments[0]["line"] == 42
     assert "GuardianCI WARN" in comments[0]["body"]
+    assert "SOC 2 CC7.2" in comments[0]["body"]
+    assert "within-sprint" in comments[0]["body"]
 
 
 def test_review_body_mentions_critical_findings_and_validation_errors() -> None:
@@ -208,12 +292,16 @@ def test_review_body_mentions_critical_findings_and_validation_errors() -> None:
             severity="CRITICAL",
             issue="SQL injection.",
             suggested_fix="Use parameters.",
+            frameworks=("PCI-DSS 6.2.4", "SOC 2 CC6.1", "GDPR Art. 32"),
+            remediation_urgency="before-merge",
         )
     ]
 
     body = review.render_review_body(findings, ["bad shape"], truncated=True)
 
     assert "CRITICAL: 1" in body
+    assert "Frameworks touched: GDPR Art. 32, PCI-DSS 6.2.4, SOC 2 CC6.1" in body
+    assert "before-merge: 1" in body
     assert "block this PR" in body
     assert "diff was truncated" in body
     assert "bad shape" in body
@@ -223,6 +311,21 @@ def test_no_finding_body_is_non_blocking() -> None:
     body = review.render_review_body([], [], truncated=False)
 
     assert "no blocking security findings" in body
+
+
+def test_review_body_can_describe_local_only_review() -> None:
+    body = review.render_review_body([], [], truncated=False, gemini_ran=False)
+
+    assert body.startswith("GuardianCI compliance review")
+    assert "Gemini" not in body
+
+
+def test_user_prompt_requires_compliance_schema_fields() -> None:
+    prompt = review.user_prompt("diff --git a/app/api.py b/app/api.py", truncated=False)
+
+    assert "PCI-DSS 4.0" in prompt
+    assert '"frameworks"' in prompt
+    assert '"remediation_urgency"' in prompt
 
 
 def test_quota_error_detection_matches_common_provider_messages() -> None:
