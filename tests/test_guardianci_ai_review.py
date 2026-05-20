@@ -41,6 +41,13 @@ def test_select_review_patches_skips_tests_and_prioritizes_high_risk_paths() -> 
     ]
 
 
+def test_truthy_parses_common_enabled_values() -> None:
+    assert review.truthy("true") is True
+    assert review.truthy("1") is True
+    assert review.truthy("false") is False
+    assert review.truthy(None) is False
+
+
 def test_split_patches_and_changed_lines_track_new_file_lines() -> None:
     diff = """diff --git a/app/demo.py b/app/demo.py
 index 1111111..2222222 100644
@@ -67,6 +74,43 @@ diff --git a/docs/readme.md b/docs/readme.md
     assert [path for path, _patch in patches] == ["app/demo.py", "docs/readme.md"]
     assert "app/demo.py" in changed
     assert changed["app/demo.py"] == {11, 12}
+
+
+def test_local_security_findings_detects_obvious_critical_patterns() -> None:
+    patch = """diff --git a/app/api/demo.py b/app/api/demo.py
+--- a/app/api/demo.py
++++ b/app/api/demo.py
+@@ -1,2 +1,8 @@
+ def endpoint(user_id):
++    api_key = "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
++    raw_sql = f"SELECT * FROM users WHERE id = {user_id}"
++    jwt_options = {"alg": "none"}
++    logger.info("token %s", token)
++    response = requests.get("https://example.test", verify=False)
+     return True
+"""
+
+    findings = review.local_security_findings([("app/api/demo.py", patch)])
+
+    severities = [finding.severity for finding in findings]
+    issues = " ".join(finding.issue for finding in findings)
+    assert severities.count("CRITICAL") == 3
+    assert severities.count("WARN") == 2
+    assert "hardcoded secret" in issues
+    assert "SQL injection" in issues
+
+
+def test_merge_findings_deduplicates_matching_items() -> None:
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=1,
+        line_end=1,
+        severity="WARN",
+        issue="Repeated",
+        suggested_fix="Fix once.",
+    )
+
+    assert review.merge_findings([finding], [finding]) == [finding]
 
 
 def test_truncate_diff_stops_at_budget() -> None:

@@ -176,6 +176,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_MODEL: gemini-2.0-flash
+          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'false' }}
         run: python scripts/guardianci_ai_review.py
 
   deploy:

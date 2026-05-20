@@ -79,6 +79,11 @@ def main() -> int:
     parser.add_argument("--base-ref", default=os.getenv("GITHUB_BASE_REF", "main"))
     parser.add_argument("--model", default=os.getenv("GEMINI_MODEL", DEFAULT_MODEL))
     parser.add_argument("--max-diff-chars", type=int, default=MAX_DIFF_CHARS)
+    parser.add_argument(
+        "--gemini-enabled",
+        default=os.getenv("GUARDIANCI_GEMINI_ENABLED", "false"),
+        help="Set true to call Gemini after the local security preflight.",
+    )
     args = parser.parse_args()
 
     context = github_context()
@@ -92,6 +97,7 @@ def main() -> int:
         relevant_patches = select_review_patches(file_patches)
         changed_lines = changed_new_lines(relevant_patches)
         review_diff, truncated = truncate_diff(relevant_patches, args.max_diff_chars)
+        local_findings = local_security_findings(relevant_patches)
 
         if not review_diff.strip():
             post_review(
@@ -102,8 +108,24 @@ def main() -> int:
             )
             return 0
 
+        if not truthy(args.gemini_enabled):
+            body = render_review_body(local_findings, [], truncated)
+            body += (
+                "\n\nGemini review is disabled for this run to protect API quota. "
+                "Set `GUARDIANCI_GEMINI_ENABLED=true` to enable model review."
+            )
+            comments = inline_comments(local_findings, changed_lines)
+            event = (
+                "REQUEST_CHANGES"
+                if any(finding.is_critical for finding in local_findings)
+                else "COMMENT"
+            )
+            post_review(context, body=body, event=event, comments=comments)
+            return 1 if any(finding.is_critical for finding in local_findings) else 0
+
         raw_response = call_gemini(review_diff, truncated=truncated, model=args.model)
         findings, validation_errors = validate_findings(raw_response, changed_lines)
+        findings = merge_findings(local_findings, findings)
     except json.JSONDecodeError as exc:
         post_review(
             context,
@@ -218,6 +240,10 @@ def is_relevant_path(path: str) -> bool:
     return any(lowered.endswith(suffix) for suffix in RELEVANT_SUFFIXES)
 
 
+def truthy(value: str | bool | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def is_reviewable_path(path: str) -> bool:
     lowered = path.lower()
     if any(lowered.startswith(prefix) for prefix in SKIPPED_REVIEW_PREFIXES):
@@ -284,6 +310,121 @@ def changed_new_lines(patches: list[tuple[str, str]]) -> dict[str, set[int]]:
         changed[path] = lines
 
     return changed
+
+
+def iter_added_lines(path: str, patch: str) -> list[tuple[str, int, str]]:
+    added: list[tuple[str, int, str]] = []
+    hunk_re = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+    new_line: int | None = None
+
+    for raw_line in patch.splitlines():
+        hunk = hunk_re.match(raw_line)
+        if hunk:
+            new_line = int(hunk.group(1))
+            continue
+        if new_line is None:
+            continue
+        if raw_line.startswith("+") and not raw_line.startswith("+++"):
+            added.append((path, new_line, raw_line[1:]))
+            new_line += 1
+        elif raw_line.startswith("-") and not raw_line.startswith("---"):
+            continue
+        else:
+            new_line += 1
+    return added
+
+
+def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
+    findings: list[Finding] = []
+    secret_re = re.compile(
+        r"(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}"
+    )
+    gemini_key_re = re.compile(r"AIza[0-9A-Za-z_\-]{20,}")
+
+    for path, patch in patches:
+        for file_path, line_no, line in iter_added_lines(path, patch):
+            lowered = line.lower()
+            if ("os.getenv" not in line and "secrets." not in line) and (
+                secret_re.search(line) or gemini_key_re.search(line)
+            ):
+                findings.append(
+                    Finding(
+                        file=file_path,
+                        line_start=line_no,
+                        line_end=line_no,
+                        severity="CRITICAL",
+                        issue="Possible hardcoded secret or API key added in this change.",
+                        suggested_fix="Move the value into a GitHub secret or environment variable.",
+                    )
+                )
+            if (
+                "alg" in lowered
+                and "none" in lowered
+                and ("jwt" in lowered or "algorithm" in lowered)
+            ):
+                findings.append(
+                    Finding(
+                        file=file_path,
+                        line_start=line_no,
+                        line_end=line_no,
+                        severity="CRITICAL",
+                        issue="JWT code appears to allow or reference the `alg=none` bypass pattern.",
+                        suggested_fix="Require a fixed signing algorithm and reject unsigned tokens.",
+                    )
+                )
+            if re.search(r"\b(execute|text)\s*\(\s*f['\"]", line) or re.search(
+                r"f['\"].*\b(select|insert|update|delete)\b.*\{", lowered
+            ):
+                findings.append(
+                    Finding(
+                        file=file_path,
+                        line_start=line_no,
+                        line_end=line_no,
+                        severity="CRITICAL",
+                        issue="String-built SQL with interpolation can allow SQL injection.",
+                        suggested_fix="Use SQLAlchemy bind parameters instead of interpolating user data.",
+                    )
+                )
+            if "verify=false" in lowered:
+                findings.append(
+                    Finding(
+                        file=file_path,
+                        line_start=line_no,
+                        line_end=line_no,
+                        severity="WARN",
+                        issue="TLS certificate verification is disabled.",
+                        suggested_fix="Remove `verify=False` and trust a configured CA bundle if needed.",
+                    )
+                )
+            if re.search(r"\b(print|logger\.\w+)\s*\(.*\b(ssn|password|token|api_key)\b", lowered):
+                findings.append(
+                    Finding(
+                        file=file_path,
+                        line_start=line_no,
+                        line_end=line_no,
+                        severity="WARN",
+                        issue="Potentially sensitive data is written to logs or stdout.",
+                        suggested_fix="Remove sensitive values from logs or log only redacted metadata.",
+                    )
+                )
+
+    return dedupe_findings(findings)
+
+
+def dedupe_findings(findings: list[Finding]) -> list[Finding]:
+    seen: set[tuple[str, int, str, str]] = set()
+    output: list[Finding] = []
+    for finding in findings:
+        key = (finding.file, finding.line_start, finding.severity, finding.issue)
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(finding)
+    return output
+
+
+def merge_findings(first: list[Finding], second: list[Finding]) -> list[Finding]:
+    return dedupe_findings([*first, *second])
 
 
 def call_gemini(diff_text: str, *, truncated: bool, model: str) -> Any:
