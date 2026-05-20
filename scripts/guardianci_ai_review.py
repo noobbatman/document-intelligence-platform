@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""GuardianCI Phase 2: Gemini-powered PR security review."""
+"""GuardianCI Phase 3: Gemini-powered PR security and compliance review."""
 
 from __future__ import annotations
 
@@ -19,6 +19,9 @@ DEFAULT_MODEL = "gemini-2.0-flash"
 MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 ALLOWED_SEVERITIES = {"CRITICAL", "WARN", "INFO"}
+SEVERITY_ORDER = ("CRITICAL", "WARN", "INFO")
+ALLOWED_REMEDIATION_URGENCIES = {"before-merge", "within-sprint", "backlog"}
+URGENCY_ORDER = ("before-merge", "within-sprint", "backlog")
 SKIPPED_REVIEW_PREFIXES = (
     "docs/",
     "tests/",
@@ -71,6 +74,8 @@ class Finding:
     severity: str
     issue: str
     suggested_fix: str
+    frameworks: tuple[str, ...] = ()
+    remediation_urgency: str = "within-sprint"
 
     @property
     def is_critical(self) -> bool:
@@ -105,7 +110,7 @@ def main() -> int:
         if not review_diff.strip():
             post_review(
                 context,
-                body="GuardianCI Gemini review found no security-relevant changed files.",
+                body="GuardianCI compliance review found no security-relevant changed files.",
                 event="COMMENT",
                 comments=[],
             )
@@ -360,6 +365,8 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         severity="CRITICAL",
                         issue="Possible hardcoded secret or API key added in this change.",
                         suggested_fix="Move the value into a GitHub secret or environment variable.",
+                        frameworks=("PCI-DSS 6.4.3", "SOC 2 CC6.1", "GDPR Art. 32"),
+                        remediation_urgency="before-merge",
                     )
                 )
             if (
@@ -375,6 +382,8 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         severity="CRITICAL",
                         issue="JWT code appears to allow or reference the `alg=none` bypass pattern.",
                         suggested_fix="Require a fixed signing algorithm and reject unsigned tokens.",
+                        frameworks=("SOC 2 CC6.1", "GDPR Art. 32"),
+                        remediation_urgency="before-merge",
                     )
                 )
             if re.search(r"\b(execute|text)\s*\(\s*f['\"]", line) or re.search(
@@ -388,6 +397,8 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         severity="CRITICAL",
                         issue="String-built SQL with interpolation can allow SQL injection.",
                         suggested_fix="Use SQLAlchemy bind parameters instead of interpolating user data.",
+                        frameworks=("PCI-DSS 6.2.4", "SOC 2 CC6.1", "GDPR Art. 32"),
+                        remediation_urgency="before-merge",
                     )
                 )
             if "verify=false" in lowered:
@@ -399,6 +410,8 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         severity="WARN",
                         issue="TLS certificate verification is disabled.",
                         suggested_fix="Remove `verify=False` and trust a configured CA bundle if needed.",
+                        frameworks=("SOC 2 CC6.7", "GDPR Art. 32"),
+                        remediation_urgency="within-sprint",
                     )
                 )
             if re.search(r"\b(print|logger\.\w+)\s*\(.*\b(ssn|password|token|api_key)\b", lowered):
@@ -410,6 +423,8 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         severity="WARN",
                         issue="Potentially sensitive data is written to logs or stdout.",
                         suggested_fix="Remove sensitive values from logs or log only redacted metadata.",
+                        frameworks=("SOC 2 CC7.2", "GDPR Art. 32"),
+                        remediation_urgency="within-sprint",
                     )
                 )
 
@@ -462,6 +477,7 @@ def system_prompt() -> str:
         "You are GuardianCI, a fintech-focused security reviewer for pull request diffs. "
         "Review only the changed lines in the provided unified diff. "
         "Find concrete security risks. Do not report style, maintainability, or speculative issues. "
+        "Map each issue to relevant PCI-DSS 4.0, SOC 2 Type II, or GDPR control citations when applicable. "
         "Return strict JSON only."
     )
 
@@ -483,6 +499,11 @@ Review this PR diff for:
 - PII logged in plaintext
 - Unvalidated Pydantic models on financial or legal data
 
+For each finding, map visible compliance impact using only these framework families:
+- PCI-DSS 4.0 controls for payment data, cryptography, secure development, access control, and logging
+- SOC 2 Type II CC6, CC7, and CC8 controls
+- GDPR Art. 25 and Art. 32
+
 Return JSON in this exact shape:
 {{
   "findings": [
@@ -492,7 +513,9 @@ Return JSON in this exact shape:
       "line_end": 12,
       "severity": "CRITICAL | WARN | INFO",
       "issue": "Concrete issue visible in the diff.",
-      "suggested_fix": "Concrete fix."
+      "suggested_fix": "Concrete fix.",
+      "frameworks": ["PCI-DSS 6.4.3", "SOC 2 CC6.1", "GDPR Art. 32"],
+      "remediation_urgency": "before-merge | within-sprint | backlog"
     }}
   ]
 }}
@@ -547,6 +570,8 @@ def validate_findings(
             severity = str(item["severity"]).upper()
             issue = str(item["issue"]).strip()
             suggested_fix = str(item["suggested_fix"]).strip()
+            frameworks = normalize_frameworks(item["frameworks"])
+            remediation_urgency = str(item["remediation_urgency"]).strip().lower()
         except (KeyError, TypeError, ValueError) as exc:
             errors.append(f"Finding {idx} has invalid fields: {exc}.")
             continue
@@ -565,6 +590,9 @@ def validate_findings(
         if not issue or not suggested_fix:
             errors.append(f"Finding {idx} must include issue and suggested_fix.")
             continue
+        if remediation_urgency not in ALLOWED_REMEDIATION_URGENCIES:
+            errors.append(f"Finding {idx} has invalid remediation_urgency: {remediation_urgency}.")
+            continue
 
         valid.append(
             Finding(
@@ -574,26 +602,47 @@ def validate_findings(
                 severity=severity,
                 issue=issue,
                 suggested_fix=suggested_fix,
+                frameworks=frameworks,
+                remediation_urgency=remediation_urgency,
             )
         )
 
     return valid, errors
 
 
+def normalize_frameworks(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise ValueError("frameworks must be a list")
+    frameworks = tuple(str(item).strip() for item in value if str(item).strip())
+    return frameworks[:8]
+
+
+def sorted_frameworks(findings: list[Finding]) -> list[str]:
+    frameworks = {framework for finding in findings for framework in finding.frameworks}
+    return sorted(frameworks)
+
+
 def render_review_body(
     findings: list[Finding], validation_errors: list[str], truncated: bool
 ) -> str:
     if not findings:
-        body = "GuardianCI Gemini review found no blocking security findings."
+        body = "GuardianCI Gemini compliance review found no blocking security findings."
     else:
-        counts = {severity: 0 for severity in ALLOWED_SEVERITIES}
+        counts = {severity: 0 for severity in SEVERITY_ORDER}
+        urgency_counts = {urgency: 0 for urgency in URGENCY_ORDER}
         for finding in findings:
             counts[finding.severity] += 1
+            urgency_counts[finding.remediation_urgency] += 1
+        frameworks = sorted_frameworks(findings)
         body = (
-            "GuardianCI Gemini security review completed.\n\n"
+            "GuardianCI Gemini compliance review completed.\n\n"
+            f"Frameworks touched: {', '.join(frameworks) if frameworks else 'None mapped'}\n\n"
             f"- CRITICAL: {counts['CRITICAL']}\n"
             f"- WARN: {counts['WARN']}\n"
             f"- INFO: {counts['INFO']}\n"
+            f"- before-merge: {urgency_counts['before-merge']}\n"
+            f"- within-sprint: {urgency_counts['within-sprint']}\n"
+            f"- backlog: {urgency_counts['backlog']}\n"
         )
         if counts["CRITICAL"]:
             body += "\nCRITICAL findings block this PR until fixed.\n"
@@ -636,7 +685,9 @@ def inline_comments(
                 "body": (
                     f"**GuardianCI {finding.severity}**\n\n"
                     f"{finding.issue}\n\n"
-                    f"Suggested fix: {finding.suggested_fix}"
+                    f"Suggested fix: {finding.suggested_fix}\n\n"
+                    f"Frameworks: {', '.join(finding.frameworks) if finding.frameworks else 'None mapped'}\n\n"
+                    f"Remediation urgency: `{finding.remediation_urgency}`"
                 ),
             }
         )
