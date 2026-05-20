@@ -325,10 +325,10 @@ def parse_hunk_lines(patch: str) -> list[tuple[int, str, bool]]:
             continue
         if new_line is None:
             continue
-        if raw_line.startswith("+") and not raw_line.startswith("+++"):
+        if raw_line.startswith("+"):
             lines.append((new_line, raw_line[1:], True))
             new_line += 1
-        elif raw_line.startswith("-") and not raw_line.startswith("---"):
+        elif raw_line.startswith("-") or raw_line.startswith("\\"):
             continue
         else:
             content = raw_line[1:] if raw_line.startswith(" ") else raw_line

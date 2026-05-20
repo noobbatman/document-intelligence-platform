@@ -99,6 +99,29 @@ def test_parse_hunk_lines_marks_added_and_context_lines_once() -> None:
     ]
 
 
+def test_parse_hunk_lines_preserves_content_that_looks_like_headers() -> None:
+    patch = """diff --git a/app/demo.py b/app/demo.py
+--- a/app/demo.py
++++ b/app/demo.py
+@@ -1,4 +1,5 @@
+ first = True
+---- removed delimiter
+++++ added delimiter
++second = True
+\\ No newline at end of file
+ third = True
+"""
+
+    parsed = review.parse_hunk_lines(patch)
+
+    assert parsed == [
+        (1, "first = True", False),
+        (2, "+++ added delimiter", True),
+        (3, "second = True", True),
+        (4, "third = True", False),
+    ]
+
+
 def test_collect_diff_uses_five_lines_of_context(monkeypatch) -> None:
     calls = []
 
