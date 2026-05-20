@@ -21,6 +21,7 @@ def test_relevant_path_filter_includes_code_config_and_env_files() -> None:
     assert review.is_relevant_path("docs/guide.md") is False
     assert review.is_reviewable_path("tests/test_api.py") is False
     assert review.is_reviewable_path("docs/security.md") is False
+    assert review.is_reviewable_path("scripts/guardianci_ai_review.py") is False
     assert review.is_reviewable_path("app/api/routes.py") is True
 
 

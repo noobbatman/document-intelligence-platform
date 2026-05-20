@@ -26,6 +26,9 @@ SKIPPED_REVIEW_PREFIXES = (
     "evaluation/results/",
     "data/",
 )
+SKIPPED_REVIEW_PATHS = {
+    "scripts/guardianci_ai_review.py",
+}
 HIGH_RISK_PREFIXES = (
     ".github/workflows/",
     "app/api/",
@@ -246,6 +249,8 @@ def truthy(value: str | bool | None) -> bool:
 
 def is_reviewable_path(path: str) -> bool:
     lowered = path.lower()
+    if lowered in SKIPPED_REVIEW_PATHS:
+        return False
     if any(lowered.startswith(prefix) for prefix in SKIPPED_REVIEW_PREFIXES):
         return False
     return is_relevant_path(path)
