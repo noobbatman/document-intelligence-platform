@@ -180,6 +180,48 @@ def test_validate_findings_accepts_good_items_and_reports_bad_items() -> None:
     assert len(errors) == 2
 
 
+def test_validate_findings_defaults_optional_compliance_fields() -> None:
+    payload = {
+        "findings": [
+            {
+                "file": "app/api.py",
+                "line_start": 42,
+                "severity": "WARN",
+                "issue": "Missing tenant check.",
+                "suggested_fix": "Derive tenant from the authenticated principal.",
+            }
+        ]
+    }
+
+    findings, errors = review.validate_findings(payload, {"app/api.py": {42}})
+
+    assert errors == []
+    assert len(findings) == 1
+    assert findings[0].line_end == 42
+    assert findings[0].frameworks == ()
+    assert findings[0].remediation_urgency == "within-sprint"
+
+
+def test_validate_findings_rejects_explicit_invalid_line_end() -> None:
+    payload = {
+        "findings": [
+            {
+                "file": "app/api.py",
+                "line_start": 42,
+                "line_end": 0,
+                "severity": "WARN",
+                "issue": "Missing tenant check.",
+                "suggested_fix": "Derive tenant from the authenticated principal.",
+            }
+        ]
+    }
+
+    findings, errors = review.validate_findings(payload, {"app/api.py": {42}})
+
+    assert findings == []
+    assert any("invalid line range: 42-0" in error for error in errors)
+
+
 def test_validate_findings_rejects_bad_phase_3_fields() -> None:
     payload = {
         "findings": [
@@ -200,6 +242,14 @@ def test_validate_findings_rejects_bad_phase_3_fields() -> None:
 
     assert findings == []
     assert "frameworks must be a list" in errors[0]
+
+
+def test_normalize_frameworks_skips_non_strings_and_deduplicates() -> None:
+    frameworks = review.normalize_frameworks(
+        [" SOC 2 CC6.1 ", None, "GDPR Art. 32", "SOC 2 CC6.1", "", 123]
+    )
+
+    assert frameworks == ("SOC 2 CC6.1", "GDPR Art. 32")
 
 
 def test_inline_comments_only_include_changed_lines() -> None:
@@ -261,6 +311,13 @@ def test_no_finding_body_is_non_blocking() -> None:
     body = review.render_review_body([], [], truncated=False)
 
     assert "no blocking security findings" in body
+
+
+def test_review_body_can_describe_local_only_review() -> None:
+    body = review.render_review_body([], [], truncated=False, gemini_ran=False)
+
+    assert body.startswith("GuardianCI compliance review")
+    assert "Gemini" not in body
 
 
 def test_user_prompt_requires_compliance_schema_fields() -> None:

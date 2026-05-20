@@ -117,7 +117,7 @@ def main() -> int:
             return 0
 
         if not truthy(args.gemini_enabled):
-            body = render_review_body(local_findings, [], truncated)
+            body = render_review_body(local_findings, [], truncated, gemini_ran=False)
             body += (
                 "\n\nGemini review is disabled for this run to protect API quota. "
                 "Set `GUARDIANCI_GEMINI_ENABLED=true` to enable model review."
@@ -168,7 +168,7 @@ def main() -> int:
         )
         return 1
 
-    body = render_review_body(findings, validation_errors, truncated)
+    body = render_review_body(findings, validation_errors, truncated, gemini_ran=True)
     comments = inline_comments(findings, changed_lines)
     event = "REQUEST_CHANGES" if any(finding.is_critical for finding in findings) else "COMMENT"
     post_review(context, body=body, event=event, comments=comments)
@@ -566,12 +566,14 @@ def validate_findings(
         try:
             file_path = str(item["file"])
             line_start = int(item["line_start"])
-            line_end = int(item.get("line_end") or line_start)
+            line_end = int(item["line_end"]) if "line_end" in item else line_start
             severity = str(item["severity"]).upper()
             issue = str(item["issue"]).strip()
             suggested_fix = str(item["suggested_fix"]).strip()
-            frameworks = normalize_frameworks(item["frameworks"])
-            remediation_urgency = str(item["remediation_urgency"]).strip().lower()
+            frameworks = normalize_frameworks(item.get("frameworks", []))
+            remediation_urgency = (
+                str(item.get("remediation_urgency", "within-sprint")).strip().lower()
+            )
         except (KeyError, TypeError, ValueError) as exc:
             errors.append(f"Finding {idx} has invalid fields: {exc}.")
             continue
@@ -613,8 +615,17 @@ def validate_findings(
 def normalize_frameworks(value: Any) -> tuple[str, ...]:
     if not isinstance(value, list):
         raise ValueError("frameworks must be a list")
-    frameworks = tuple(str(item).strip() for item in value if str(item).strip())
-    return frameworks[:8]
+    frameworks: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        normalized = item.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        frameworks.append(normalized)
+    return tuple(frameworks[:8])
 
 
 def sorted_frameworks(findings: list[Finding]) -> list[str]:
@@ -623,10 +634,17 @@ def sorted_frameworks(findings: list[Finding]) -> list[str]:
 
 
 def render_review_body(
-    findings: list[Finding], validation_errors: list[str], truncated: bool
+    findings: list[Finding],
+    validation_errors: list[str],
+    truncated: bool,
+    *,
+    gemini_ran: bool = True,
 ) -> str:
+    review_label = (
+        "GuardianCI Gemini compliance review" if gemini_ran else "GuardianCI compliance review"
+    )
     if not findings:
-        body = "GuardianCI Gemini compliance review found no blocking security findings."
+        body = f"{review_label} found no blocking security findings."
     else:
         counts = {severity: 0 for severity in SEVERITY_ORDER}
         urgency_counts = {urgency: 0 for urgency in URGENCY_ORDER}
@@ -635,7 +653,7 @@ def render_review_body(
             urgency_counts[finding.remediation_urgency] += 1
         frameworks = sorted_frameworks(findings)
         body = (
-            "GuardianCI Gemini compliance review completed.\n\n"
+            f"{review_label} completed.\n\n"
             f"Frameworks touched: {', '.join(frameworks) if frameworks else 'None mapped'}\n\n"
             f"- CRITICAL: {counts['CRITICAL']}\n"
             f"- WARN: {counts['WARN']}\n"
