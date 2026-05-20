@@ -407,6 +407,42 @@ def test_validate_fix_payload_strips_code_fences() -> None:
     assert review.validate_fix_payload(payload) == "safe_value = os.getenv('API_KEY')"
 
 
+def test_validate_fix_payload_rejects_empty_code_inside_fences() -> None:
+    payload = {"replacement": "```python\n\n```"}
+
+    try:
+        review.validate_fix_payload(payload)
+    except ValueError as exc:
+        assert "non-empty code inside" in str(exc)
+    else:
+        raise AssertionError("Expected empty fenced replacement to be rejected.")
+
+
+def test_build_fix_context_uses_bounded_window_and_imports() -> None:
+    file_text = "\n".join(
+        [
+            "import os",
+            "SECRET = 'do-not-send-unrelated-context'",
+            *[f"line_{idx} = {idx}" for idx in range(1, 16)],
+        ]
+    )
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=10,
+        line_end=10,
+        severity="CRITICAL",
+        issue="Hardcoded secret.",
+        suggested_fix="Use env.",
+    )
+
+    context = review.build_fix_context(file_text, finding, radius=2)
+
+    assert "1: import os" in context
+    assert "10: line_8 = 8" in context
+    assert "12: line_10 = 10" in context
+    assert "SECRET = 'do-not-send-unrelated-context'" not in context
+
+
 def test_apply_line_replacement_replaces_exact_range(tmp_path: Path) -> None:
     target = tmp_path / "demo.py"
     target.write_text("first = True\nbad = True\nlast = True\n", encoding="utf-8")
@@ -424,6 +460,11 @@ def test_auto_fix_branch_name_is_stable_and_sanitized() -> None:
 
     assert branch.startswith("guardianCI/fix-abcdef12-jwt-code-appears")
     assert "`" not in branch
+
+
+def test_safe_summary_removes_control_characters_and_collapses_whitespace() -> None:
+    assert review.safe_summary("SQL\n injection\t issue", 80) == "SQL injection issue"
+    assert review.safe_summary("\n\t", 80) == "security finding"
 
 
 def test_auto_fix_pr_body_lists_original_pr_findings_and_files() -> None:
@@ -469,7 +510,7 @@ def test_create_draft_fix_pr_posts_expected_payload(monkeypatch) -> None:
         line_start=10,
         line_end=10,
         severity="CRITICAL",
-        issue="SQL injection.",
+        issue="SQL injection.\nDo not put this on line two.",
         suggested_fix="Use bind parameters.",
     )
     monkeypatch.setattr(review.requests, "post", fake_post)
@@ -490,8 +531,25 @@ def test_create_draft_fix_pr_posts_expected_payload(monkeypatch) -> None:
     assert pr_url == "https://github.test/pr/10"
     assert pr_number == 10
     assert calls[0]["json"]["draft"] is True
+    assert "\n" not in calls[0]["json"]["title"]
     assert calls[0]["json"]["base"] == "feature-branch"
     assert calls[0]["json"]["head"] == "guardianCI/fix-abc-sql-injection"
+
+
+def test_has_git_changes_uses_porcelain_status(monkeypatch) -> None:
+    calls = []
+
+    class FakeResult:
+        stdout = " M app/api.py\n"
+
+    def fake_run(args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return FakeResult()
+
+    monkeypatch.setattr(review.subprocess, "run", fake_run)
+
+    assert review.has_git_changes(["app/api.py"]) is True
+    assert calls[0]["args"] == ["git", "status", "--porcelain", "--", "app/api.py"]
 
 
 def test_post_auto_fix_comment_links_fix_pr(monkeypatch) -> None:

@@ -19,6 +19,7 @@ DEFAULT_MODEL = "gemma-4-31b-it"
 MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 MAX_AUTOFIX_FINDINGS = 3
+FIX_CONTEXT_RADIUS = 40
 ALLOWED_SEVERITIES = {"CRITICAL", "WARN", "INFO"}
 SEVERITY_ORDER = ("CRITICAL", "WARN", "INFO")
 ALLOWED_REMEDIATION_URGENCIES = {"before-merge", "within-sprint", "backlog"}
@@ -107,6 +108,17 @@ def main() -> int:
         default=os.getenv("GUARDIANCI_AUTOFIX_ENABLED", "false"),
         help="Set true to create draft fix PRs for CRITICAL findings.",
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--review-only",
+        action="store_true",
+        help="Post the security review only; never create auto-fix branches.",
+    )
+    mode.add_argument(
+        "--auto-fix-only",
+        action="store_true",
+        help="Create auto-fix PRs only; do not post a duplicate security review.",
+    )
     args = parser.parse_args()
 
     context = github_context()
@@ -123,33 +135,30 @@ def main() -> int:
         local_findings = local_security_findings(relevant_patches)
 
         if not review_diff.strip():
-            post_review(
-                context,
-                body="GuardianCI compliance review found no security-relevant changed files.",
-                event="COMMENT",
-                comments=[],
-            )
+            if not args.auto_fix_only:
+                post_review(
+                    context,
+                    body="GuardianCI compliance review found no security-relevant changed files.",
+                    event="COMMENT",
+                    comments=[],
+                )
+            else:
+                print("GuardianCI auto-fix found no security-relevant changed files.")
             return 0
 
         if not truthy(args.gemini_enabled):
-            body = render_review_body(local_findings, [], truncated, gemini_ran=False)
-            body += (
-                "\n\nGemini review is disabled for this run to protect API quota. "
-                "Set `GUARDIANCI_GEMINI_ENABLED=true` to enable model review."
-            )
-            comments = inline_comments(local_findings, changed_lines)
-            event = (
-                "REQUEST_CHANGES"
-                if any(finding.is_critical for finding in local_findings)
-                else "COMMENT"
-            )
-            post_review(context, body=body, event=event, comments=comments)
-            return 1 if any(finding.is_critical for finding in local_findings) else 0
-
-        raw_response = call_gemini(review_diff, truncated=truncated, model=args.model)
-        findings, validation_errors = validate_findings(raw_response, changed_lines)
-        findings = merge_findings(local_findings, findings)
+            findings = local_findings
+            validation_errors: list[str] = []
+            gemini_ran = False
+        else:
+            raw_response = call_gemini(review_diff, truncated=truncated, model=args.model)
+            findings, validation_errors = validate_findings(raw_response, changed_lines)
+            findings = merge_findings(local_findings, findings)
+            gemini_ran = True
     except json.JSONDecodeError as exc:
+        if args.auto_fix_only:
+            print(f"GuardianCI auto-fix could not parse Gemini review JSON: {exc}")
+            return 0
         post_review(
             context,
             body=(
@@ -162,6 +171,9 @@ def main() -> int:
         return 0
     except Exception as exc:
         if is_quota_or_rate_limit_error(exc):
+            if args.auto_fix_only:
+                print(f"GuardianCI auto-fix skipped due to quota/rate limit: {exc}")
+                return 0
             post_review(
                 context,
                 body=(
@@ -183,14 +195,41 @@ def main() -> int:
         )
         return 1
 
-    body = render_review_body(findings, validation_errors, truncated, gemini_ran=True)
+    critical_findings = [finding for finding in findings if finding.is_critical]
+    if args.auto_fix_only:
+        if not critical_findings:
+            print("GuardianCI auto-fix found no CRITICAL findings to fix.")
+            return 0
+        if not truthy(args.auto_fix_enabled):
+            print("GuardianCI auto-fix is disabled for this run.")
+            return 0
+        try:
+            result = prepare_auto_fix_pull_request(context, critical_findings, model=args.model)
+            if result:
+                post_auto_fix_comment(context, result)
+        except Exception as exc:
+            post_issue_comment(
+                context,
+                (
+                    "GuardianCI could not prepare an auto-fix PR for the CRITICAL "
+                    f"finding(s): `{exc}`"
+                ),
+            )
+            print(f"GuardianCI auto-fix failed: {exc}")
+        return 0
+
+    body = render_review_body(findings, validation_errors, truncated, gemini_ran=gemini_ran)
+    if not gemini_ran:
+        body += (
+            "\n\nGemini review is disabled for this run to protect API quota. "
+            "Set `GUARDIANCI_GEMINI_ENABLED=true` to enable model review."
+        )
     comments = inline_comments(findings, changed_lines)
-    event = "REQUEST_CHANGES" if any(finding.is_critical for finding in findings) else "COMMENT"
+    event = "REQUEST_CHANGES" if critical_findings else "COMMENT"
     post_review(context, body=body, event=event, comments=comments)
 
-    critical_findings = [finding for finding in findings if finding.is_critical]
     if critical_findings:
-        if truthy(args.auto_fix_enabled):
+        if not args.review_only and truthy(args.auto_fix_enabled):
             try:
                 result = prepare_auto_fix_pull_request(context, critical_findings, model=args.model)
                 if result:
@@ -204,7 +243,7 @@ def main() -> int:
                     ),
                 )
                 print(f"GuardianCI auto-fix failed: {exc}")
-        else:
+        elif not args.review_only:
             print("GuardianCI auto-fix is disabled for this run.")
         print("GuardianCI found CRITICAL security findings.")
         return 1
@@ -571,6 +610,7 @@ def fix_system_prompt() -> str:
 
 
 def fix_user_prompt(file_path: str, file_text: str, finding: Finding) -> str:
+    fix_context = build_fix_context(file_text, finding)
     return f"""
 Fix this CRITICAL GuardianCI finding.
 
@@ -592,9 +632,9 @@ Rules:
 - Do not include markdown fences inside the replacement value.
 - Do not introduce new dependencies unless the file already imports them.
 
-CURRENT FILE CONTENT:
+BOUNDED FILE CONTEXT:
 ```text
-{file_text}
+{fix_context}
 ```
 """.strip()
 
@@ -650,7 +690,12 @@ def validate_fix_payload(payload: Any) -> str:
     replacement = payload.get("replacement")
     if not isinstance(replacement, str) or not replacement.strip():
         raise ValueError("Gemini auto-fix response must include a non-empty replacement.")
-    return strip_code_fence(replacement)
+    cleaned_replacement = strip_code_fence(replacement)
+    if not cleaned_replacement.strip():
+        raise ValueError(
+            "Gemini auto-fix response must include non-empty code inside any code fences."
+        )
+    return cleaned_replacement
 
 
 def strip_code_fence(value: str) -> str:
@@ -658,6 +703,27 @@ def strip_code_fence(value: str) -> str:
     cleaned = re.sub(r"^```[a-zA-Z0-9_+-]*\n", "", cleaned)
     cleaned = re.sub(r"\n```$", "", cleaned)
     return cleaned
+
+
+def build_fix_context(file_text: str, finding: Finding, *, radius: int = FIX_CONTEXT_RADIUS) -> str:
+    lines = file_text.splitlines()
+    imports = [
+        (idx, line)
+        for idx, line in enumerate(lines[:200], start=1)
+        if line.startswith(("import ", "from "))
+    ]
+    start = max(1, finding.line_start - radius)
+    end = min(len(lines), finding.line_end + radius)
+
+    chunks: list[str] = []
+    if imports:
+        chunks.append("Relevant imports:")
+        chunks.extend(f"{line_no}: {line}" for line_no, line in imports[:40])
+        chunks.append("")
+
+    chunks.append(f"Context window lines {start}-{end}:")
+    chunks.extend(f"{line_no}: {lines[line_no - 1]}" for line_no in range(start, end + 1))
+    return "\n".join(chunks)
 
 
 def validate_findings(
@@ -821,8 +887,12 @@ def prepare_auto_fix_pull_request(
         return None
 
     unique_files = sorted(set(fixed_files))
+    if not has_git_changes(unique_files):
+        print("GuardianCI auto-fix produced no actual file changes; skipping PR creation.")
+        return None
+
     run_git(["add", *unique_files])
-    run_git(["commit", "-m", f"GuardianCI auto-fix: {selected[0].issue[:60]}"])
+    run_git(["commit", "-m", f"GuardianCI auto-fix: {safe_summary(selected[0].issue, 60)}"])
     run_git(["push", "--force-with-lease", "origin", f"HEAD:{branch}"])
 
     pr_url, pr_number = create_draft_fix_pr(
@@ -849,6 +919,11 @@ def auto_fix_branch_name(head_sha: str, issue: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", issue.lower()).strip("-")[:42] or "critical-finding"
     short_sha = re.sub(r"[^a-f0-9]", "", head_sha.lower())[:8] or "unknown"
     return f"guardianCI/fix-{short_sha}-{slug}"
+
+
+def safe_summary(text: str, limit: int, *, fallback: str = "security finding") -> str:
+    normalized = re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]+", " ", text)).strip()
+    return (normalized or fallback)[:limit]
 
 
 def apply_line_replacement(path: Path, line_start: int, line_end: int, replacement: str) -> None:
@@ -891,7 +966,7 @@ def create_draft_fix_pr(
 ) -> tuple[str | None, int | None]:
     url = f"https://api.github.com/repos/{context['repo']}/pulls"
     payload = {
-        "title": f"[GuardianCI Auto-Fix] {findings[0].issue[:80]}",
+        "title": f"[GuardianCI Auto-Fix] {safe_summary(findings[0].issue, 80)}",
         "head": branch,
         "base": context["head_ref"],
         "body": auto_fix_pr_body(context, findings, fixed_files, needs_human_review),
@@ -985,6 +1060,16 @@ def request_fix_pr_reviewer(context: dict[str, Any], pr_number: int, reviewer: s
             print(f"GuardianCI could not request reviewer `{reviewer}` for PR #{pr_number}.")
         return
     response.raise_for_status()
+
+
+def has_git_changes(paths: list[str]) -> bool:
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--", *paths],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return bool(result.stdout.strip())
 
 
 def run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
