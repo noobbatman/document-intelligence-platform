@@ -175,9 +175,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_MODEL: gemini-2.0-flash
-          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'false' }}
-          GUARDIANCI_AUTOFIX_ENABLED: ${{ vars.GUARDIANCI_AUTOFIX_ENABLED || 'false' }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
+          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
+          GUARDIANCI_AUTOFIX_ENABLED: ${{ vars.GUARDIANCI_AUTOFIX_ENABLED || 'true' }}
         run: python scripts/guardianci_ai_review.py
 
   deploy:

@@ -15,7 +15,7 @@ from typing import Any
 
 import requests
 
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemma-4-31b-it"
 MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 MAX_AUTOFIX_FINDINGS = 3
