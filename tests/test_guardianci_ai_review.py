@@ -77,6 +77,73 @@ diff --git a/docs/readme.md b/docs/readme.md
     assert changed["app/demo.py"] == {11, 12}
 
 
+def test_parse_hunk_lines_marks_added_and_context_lines_once() -> None:
+    patch = """diff --git a/app/demo.py b/app/demo.py
+--- a/app/demo.py
++++ b/app/demo.py
+@@ -10,2 +10,3 @@ def endpoint():
+ context = True
+-raw_sql = "SELECT * FROM users"
++raw_sql = f"SELECT * FROM users WHERE id = {user_id}"
++return raw_sql
+ unchanged = True
+"""
+
+    parsed = review.parse_hunk_lines(patch)
+
+    assert parsed == [
+        (10, "context = True", False),
+        (11, 'raw_sql = f"SELECT * FROM users WHERE id = {user_id}"', True),
+        (12, "return raw_sql", True),
+        (13, "unchanged = True", False),
+    ]
+
+
+def test_parse_hunk_lines_preserves_content_that_looks_like_headers() -> None:
+    patch = """diff --git a/app/demo.py b/app/demo.py
+--- a/app/demo.py
++++ b/app/demo.py
+@@ -1,4 +1,5 @@
+ first = True
+---- removed delimiter
+++++ added delimiter
++second = True
+\\ No newline at end of file
+ third = True
+"""
+
+    parsed = review.parse_hunk_lines(patch)
+
+    assert parsed == [
+        (1, "first = True", False),
+        (2, "+++ added delimiter", True),
+        (3, "second = True", True),
+        (4, "third = True", False),
+    ]
+
+
+def test_collect_diff_uses_five_lines_of_context(monkeypatch) -> None:
+    calls = []
+
+    class FakeResult:
+        stdout = "diff output"
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return FakeResult()
+
+    monkeypatch.setattr(review.subprocess, "run", fake_run)
+
+    assert review.collect_diff("main") == "diff output"
+    assert calls[1] == [
+        "git",
+        "diff",
+        "--unified=5",
+        "--diff-filter=ACMRT",
+        "origin/main...HEAD",
+    ]
+
+
 def test_local_security_findings_detects_obvious_critical_patterns() -> None:
     patch = """diff --git a/app/api/demo.py b/app/api/demo.py
 --- a/app/api/demo.py
@@ -332,3 +399,34 @@ def test_quota_error_detection_matches_common_provider_messages() -> None:
     assert review.is_quota_or_rate_limit_error(RuntimeError("429 TooManyRequests")) is True
     assert review.is_quota_or_rate_limit_error(RuntimeError("RESOURCE_EXHAUSTED quota")) is True
     assert review.is_quota_or_rate_limit_error(RuntimeError("network down")) is False
+
+
+def test_post_review_logs_and_retries_body_only_on_inline_comment_rejection(
+    monkeypatch, capsys
+) -> None:
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code: int) -> None:
+            self.status_code = status_code
+
+        def raise_for_status(self) -> None:
+            return None
+
+    def fake_post(_url, *, headers, json, timeout):
+        calls.append({"headers": headers, "json": dict(json), "timeout": timeout})
+        return FakeResponse(422 if len(calls) == 1 else 200)
+
+    monkeypatch.setattr(review.requests, "post", fake_post)
+
+    review.post_review(
+        {"token": "token", "repo": "owner/repo", "pr_number": 12},
+        body="body",
+        event="COMMENT",
+        comments=[{"path": "app/api.py", "line": 1, "side": "RIGHT", "body": "comment"}],
+    )
+
+    output = capsys.readouterr().out
+    assert "GitHub rejected 1 inline comment(s)" in output
+    assert "comments" in calls[0]["json"]
+    assert "comments" not in calls[1]["json"]

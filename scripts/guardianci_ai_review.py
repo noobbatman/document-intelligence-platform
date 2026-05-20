@@ -22,6 +22,7 @@ ALLOWED_SEVERITIES = {"CRITICAL", "WARN", "INFO"}
 SEVERITY_ORDER = ("CRITICAL", "WARN", "INFO")
 ALLOWED_REMEDIATION_URGENCIES = {"before-merge", "within-sprint", "backlog"}
 URGENCY_ORDER = ("before-merge", "within-sprint", "backlog")
+HUNK_RE = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 SKIPPED_REVIEW_PREFIXES = (
     "docs/",
     "tests/",
@@ -206,7 +207,7 @@ def collect_diff(base_ref: str) -> str:
         check=False,
     )
     result = subprocess.run(
-        ["git", "diff", "--unified=20", "--diff-filter=ACMRT", f"{base}...HEAD"],
+        ["git", "diff", "--unified=5", "--diff-filter=ACMRT", f"{base}...HEAD"],
         check=True,
         text=True,
         capture_output=True,
@@ -298,50 +299,42 @@ def truncate_diff(patches: list[tuple[str, str]], max_chars: int) -> tuple[str, 
 
 def changed_new_lines(patches: list[tuple[str, str]]) -> dict[str, set[int]]:
     changed: dict[str, set[int]] = {}
-    hunk_re = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
 
     for path, patch in patches:
-        lines: set[int] = set()
-        new_line: int | None = None
-        for raw_line in patch.splitlines():
-            hunk = hunk_re.match(raw_line)
-            if hunk:
-                new_line = int(hunk.group(1))
-                continue
-            if new_line is None:
-                continue
-            if raw_line.startswith("+") and not raw_line.startswith("+++"):
-                lines.add(new_line)
-                new_line += 1
-            elif raw_line.startswith("-") and not raw_line.startswith("---"):
-                continue
-            else:
-                new_line += 1
-        changed[path] = lines
+        changed[path] = {
+            line_no for line_no, _line, is_added in parse_hunk_lines(patch) if is_added
+        }
 
     return changed
 
 
 def iter_added_lines(path: str, patch: str) -> list[tuple[str, int, str]]:
-    added: list[tuple[str, int, str]] = []
-    hunk_re = re.compile(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+    return [
+        (path, line_no, line) for line_no, line, is_added in parse_hunk_lines(patch) if is_added
+    ]
+
+
+def parse_hunk_lines(patch: str) -> list[tuple[int, str, bool]]:
+    lines: list[tuple[int, str, bool]] = []
     new_line: int | None = None
 
     for raw_line in patch.splitlines():
-        hunk = hunk_re.match(raw_line)
+        hunk = HUNK_RE.match(raw_line)
         if hunk:
             new_line = int(hunk.group(1))
             continue
         if new_line is None:
             continue
-        if raw_line.startswith("+") and not raw_line.startswith("+++"):
-            added.append((path, new_line, raw_line[1:]))
+        if raw_line.startswith("+"):
+            lines.append((new_line, raw_line[1:], True))
             new_line += 1
-        elif raw_line.startswith("-") and not raw_line.startswith("---"):
+        elif raw_line.startswith("-") or raw_line.startswith("\\"):
             continue
         else:
+            content = raw_line[1:] if raw_line.startswith(" ") else raw_line
+            lines.append((new_line, content, False))
             new_line += 1
-    return added
+    return lines
 
 
 def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
@@ -732,6 +725,10 @@ def post_review(
     response = requests.post(url, headers=headers, json=payload, timeout=20)
     if response.status_code == 422 and comments:
         # If GitHub rejects inline positions, keep the review signal as a body-only review.
+        print(
+            f"GuardianCI: GitHub rejected {len(comments)} inline comment(s) "
+            "(lines may be outside the diff context window). Falling back to body-only review."
+        )
         payload.pop("comments", None)
         response = requests.post(url, headers=headers, json=payload, timeout=20)
     response.raise_for_status()
