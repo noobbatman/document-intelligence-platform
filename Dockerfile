@@ -39,8 +39,6 @@ COPY --from=builder /install /usr/local
 
 # Application source
 COPY app ./app
-COPY alembic ./alembic
-COPY alembic.ini ./alembic.ini
 COPY scripts ./scripts
 COPY frontend ./frontend
 
