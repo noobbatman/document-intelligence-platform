@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-06T18:42:51.264679Z",
+  "generated_at": "2026-06-06T18:53:31.675326Z",
   "recent_reviews": [
     {
       "pr_number": 8,
@@ -16,13 +16,37 @@
       "timestamp": "2026-06-06T18:42:40.401767Z",
       "total_critical": 0,
       "total_warn": 0
+    },
+    {
+      "pr_number": 9,
+      "score": 80,
+      "sha": "5455b72df4fcbc36684572f0e410a4d2a626ee30",
+      "timestamp": "2026-06-06T18:53:19.946050Z",
+      "total_critical": 1,
+      "total_warn": 0
     }
   ],
-  "rolling_30_day_score": 100.0,
+  "rolling_30_day_score": 93.33,
   "schema_version": 1,
-  "severity_breakdown": {},
-  "top_frameworks": [],
-  "top_vulnerable_modules": [],
-  "total_findings": 0,
-  "total_prs_reviewed": 2
+  "severity_breakdown": {
+    "CRITICAL": 1
+  },
+  "top_frameworks": [
+    {
+      "findings": 1,
+      "framework": "PCI-DSS 7.2.1"
+    },
+    {
+      "findings": 1,
+      "framework": "SOC 2 CC6.1"
+    }
+  ],
+  "top_vulnerable_modules": [
+    {
+      "file": ".github/workflows/guardianci-false-positive.yml",
+      "findings": 1
+    }
+  ],
+  "total_findings": 1,
+  "total_prs_reviewed": 3
 }
