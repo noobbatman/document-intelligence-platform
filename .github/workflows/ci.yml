@@ -54,10 +54,10 @@ jobs:
         run: python -m spacy download en_core_web_sm
 
       - name: Ruff check
-        run: ruff check app/ tests/ scripts/guardianci_ai_review.py scripts/guardianci_metrics.py scripts/guardianci_false_positive.py
+        run: ruff check app/ tests/ scripts/guardianci_ai_review.py scripts/guardianci_metrics.py scripts/guardianci_false_positive.py scripts/guardianci_deploy.py
 
       - name: Ruff format
-        run: ruff format --check app/ tests/ scripts/guardianci_ai_review.py scripts/guardianci_metrics.py scripts/guardianci_false_positive.py
+        run: ruff format --check app/ tests/ scripts/guardianci_ai_review.py scripts/guardianci_metrics.py scripts/guardianci_false_positive.py scripts/guardianci_deploy.py
 
       - name: Run pytest with coverage gate
         run: |
@@ -264,10 +264,12 @@ jobs:
         run: python scripts/guardianci_ai_review.py --auto-fix-only
 
   deploy:
-    name: Deploy gate placeholder
+    name: Deploy to Railway
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
-      contents: read  # will expand to write + packages:write in Phase 7
+      contents: write
+      packages: write
     needs:
       - test
       - docker-smoke
@@ -275,5 +277,55 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
-      - name: Confirm Phase 1 gate
-        run: echo "All GuardianCI Phase 1 jobs passed on main. Railway deploy is added in Phase 7."
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build release image
+        env:
+          DEPLOY_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+        run: docker build -t "${DEPLOY_IMAGE}" .
+
+      - name: Push release image
+        env:
+          DEPLOY_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+        run: docker push "${DEPLOY_IMAGE}"
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coverage-report
+          path: deploy-artifacts/coverage
+
+      - name: Download GuardianCI review result
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: guardianci-review-result
+          path: deploy-artifacts/review
+
+      - name: Trigger Railway deploy
+        env:
+          DEPLOY_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          RAILWAY_WEBHOOK_URL: ${{ secrets.RAILWAY_WEBHOOK_URL }}
+          RAILWAY_ROLLBACK_WEBHOOK_URL: ${{ secrets.RAILWAY_ROLLBACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PRODUCTION_HEALTHCHECK_URL: ${{ vars.PRODUCTION_HEALTHCHECK_URL }}
+        run: >-
+          python scripts/guardianci_deploy.py
+          --coverage deploy-artifacts/coverage/coverage.xml
+          --review-result deploy-artifacts/review/guardianci-review-result.json
