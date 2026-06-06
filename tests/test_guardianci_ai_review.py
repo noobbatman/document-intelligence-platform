@@ -170,6 +170,28 @@ def test_local_security_findings_detects_obvious_critical_patterns() -> None:
     assert findings[0].remediation_urgency == "before-merge"
 
 
+def test_local_security_findings_suppresses_matching_false_positive() -> None:
+    line = '    api_key = "AIzaSyAAAAAAAAAAAAAAAAAAAAAAAAAAAA"'
+    patch = f"""diff --git a/app/api/demo.py b/app/api/demo.py
+--- a/app/api/demo.py
++++ b/app/api/demo.py
+@@ -1,2 +1,3 @@
+ def endpoint():
++{line}
+     return True
+"""
+    exclusion = review.FalsePositiveExclusion(
+        file_pattern="app/api/demo.py",
+        issue_type="Possible hardcoded secret",
+        code_context_hash=review.code_context_hash(line),
+        dismissed_by="noobbatman",
+    )
+
+    findings = review.local_security_findings([("app/api/demo.py", patch)], [exclusion])
+
+    assert findings == []
+
+
 def test_merge_findings_deduplicates_matching_items() -> None:
     finding = review.Finding(
         file="app/api.py",
@@ -424,6 +446,24 @@ def test_user_prompt_requires_compliance_schema_fields() -> None:
     assert "PCI-DSS 4.0" in prompt
     assert '"frameworks"' in prompt
     assert '"remediation_urgency"' in prompt
+
+
+def test_user_prompt_includes_false_positive_exclusions() -> None:
+    prompt = review.user_prompt(
+        "diff --git a/app/api.py b/app/api.py",
+        truncated=False,
+        exclusions=[
+            review.FalsePositiveExclusion(
+                file_pattern="app/api.py",
+                issue_type="TLS certificate verification is disabled.",
+                code_context_hash="abc123",
+            )
+        ],
+    )
+
+    assert "Known false positives" in prompt
+    assert "file_pattern=app/api.py" in prompt
+    assert "code_context_hash=abc123" in prompt
 
 
 def test_quota_error_detection_matches_common_provider_messages() -> None:
