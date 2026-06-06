@@ -1,9 +1,11 @@
 #!/usr/bin/env python
-"""GuardianCI Phase 3: Gemini-powered PR security and compliance review."""
+"""GuardianCI: Gemini-powered PR security, compliance, and auto-fix review."""
 
 from __future__ import annotations
 
 import argparse
+import fnmatch
+import hashlib
 import json
 import os
 import re
@@ -18,6 +20,8 @@ import requests
 
 DEFAULT_MODEL = "gemma-4-31b-it"
 DEFAULT_REVIEW_RESULT_PATH = "guardianci-review-result.json"
+DEFAULT_METRICS_BRANCH = "guardianci-metrics"
+FALSE_POSITIVE_EXCLUSIONS_FILE = "exclusions.json"
 MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 MAX_AUTOFIX_FINDINGS = 3
@@ -95,6 +99,15 @@ class AutoFixResult:
     needs_human_review: bool
 
 
+@dataclass(frozen=True)
+class FalsePositiveExclusion:
+    file_pattern: str
+    issue_type: str
+    code_context_hash: str
+    dismissed_by: str = ""
+    timestamp: str = ""
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run GuardianCI Gemini security review.")
     parser.add_argument("--base-ref", default=os.getenv("GITHUB_BASE_REF", "main"))
@@ -103,6 +116,11 @@ def main() -> int:
         "--review-result-path",
         default=os.getenv("GUARDIANCI_REVIEW_RESULT_PATH", DEFAULT_REVIEW_RESULT_PATH),
         help="Path where GuardianCI writes the structured review result for metrics.",
+    )
+    parser.add_argument(
+        "--exclusions-branch",
+        default=os.getenv("GUARDIANCI_METRICS_BRANCH", DEFAULT_METRICS_BRANCH),
+        help="Branch where GuardianCI false-positive exclusions are stored.",
     )
     parser.add_argument("--max-diff-chars", type=int, default=MAX_DIFF_CHARS)
     parser.add_argument(
@@ -139,7 +157,9 @@ def main() -> int:
         relevant_patches = select_review_patches(file_patches)
         changed_lines = changed_new_lines(relevant_patches)
         review_diff, truncated = truncate_diff(relevant_patches, args.max_diff_chars)
-        local_findings = local_security_findings(relevant_patches)
+        exclusions = load_false_positive_exclusions(args.exclusions_branch)
+        added_line_hashes = added_context_hashes(relevant_patches)
+        local_findings = local_security_findings(relevant_patches, exclusions)
 
         if not review_diff.strip():
             write_review_result(
@@ -168,10 +188,16 @@ def main() -> int:
             validation_errors: list[str] = []
             gemini_ran = False
         else:
-            raw_response = call_gemini(review_diff, truncated=truncated, model=args.model)
+            raw_response = call_gemini(
+                review_diff,
+                truncated=truncated,
+                model=args.model,
+                exclusions=exclusions,
+            )
             findings, validation_errors = validate_findings(raw_response, changed_lines)
             findings = merge_findings(local_findings, findings)
             gemini_ran = True
+        findings = filter_excluded_findings(findings, exclusions, added_line_hashes)
     except json.JSONDecodeError as exc:
         write_review_result(
             args.review_result_path,
@@ -475,12 +501,26 @@ def parse_hunk_lines(patch: str) -> list[tuple[int, str, bool]]:
     return lines
 
 
-def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
+def local_security_findings(
+    patches: list[tuple[str, str]],
+    exclusions: list[FalsePositiveExclusion] | None = None,
+) -> list[Finding]:
     findings: list[Finding] = []
+    exclusions = exclusions or []
     secret_re = re.compile(
         r"(?i)\b(api[_-]?key|secret|token|password)\b\s*[:=]\s*['\"][A-Za-z0-9_\-]{16,}"
     )
     gemini_key_re = re.compile(r"AIza[0-9A-Za-z_\-]{20,}")
+
+    def add_if_not_excluded(finding: Finding, line_text: str) -> None:
+        line_hash = code_context_hash(line_text)
+        if finding_matches_exclusion(finding, exclusions, line_hash):
+            print(
+                "GuardianCI suppressed known false positive: "
+                f"{finding.file}:{finding.line_start} {finding.issue}"
+            )
+            return
+        findings.append(finding)
 
     for path, patch in patches:
         for file_path, line_no, line in iter_added_lines(path, patch):
@@ -488,7 +528,7 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
             if ("os.getenv" not in line and "secrets." not in line) and (
                 secret_re.search(line) or gemini_key_re.search(line)
             ):
-                findings.append(
+                add_if_not_excluded(
                     Finding(
                         file=file_path,
                         line_start=line_no,
@@ -498,14 +538,15 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         suggested_fix="Move the value into a GitHub secret or environment variable.",
                         frameworks=("PCI-DSS 6.4.3", "SOC 2 CC6.1", "GDPR Art. 32"),
                         remediation_urgency="before-merge",
-                    )
+                    ),
+                    line,
                 )
             if (
                 "alg" in lowered
                 and "none" in lowered
                 and ("jwt" in lowered or "algorithm" in lowered)
             ):
-                findings.append(
+                add_if_not_excluded(
                     Finding(
                         file=file_path,
                         line_start=line_no,
@@ -515,12 +556,13 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         suggested_fix="Require a fixed signing algorithm and reject unsigned tokens.",
                         frameworks=("SOC 2 CC6.1", "GDPR Art. 32"),
                         remediation_urgency="before-merge",
-                    )
+                    ),
+                    line,
                 )
             if re.search(r"\b(execute|text)\s*\(\s*f['\"]", line) or re.search(
                 r"f['\"].*\b(select|insert|update|delete)\b.*\{", lowered
             ):
-                findings.append(
+                add_if_not_excluded(
                     Finding(
                         file=file_path,
                         line_start=line_no,
@@ -530,10 +572,11 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         suggested_fix="Use SQLAlchemy bind parameters instead of interpolating user data.",
                         frameworks=("PCI-DSS 6.2.4", "SOC 2 CC6.1", "GDPR Art. 32"),
                         remediation_urgency="before-merge",
-                    )
+                    ),
+                    line,
                 )
             if "verify=false" in lowered:
-                findings.append(
+                add_if_not_excluded(
                     Finding(
                         file=file_path,
                         line_start=line_no,
@@ -543,10 +586,11 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         suggested_fix="Remove `verify=False` and trust a configured CA bundle if needed.",
                         frameworks=("SOC 2 CC6.7", "GDPR Art. 32"),
                         remediation_urgency="within-sprint",
-                    )
+                    ),
+                    line,
                 )
             if re.search(r"\b(print|logger\.\w+)\s*\(.*\b(ssn|password|token|api_key)\b", lowered):
-                findings.append(
+                add_if_not_excluded(
                     Finding(
                         file=file_path,
                         line_start=line_no,
@@ -556,10 +600,132 @@ def local_security_findings(patches: list[tuple[str, str]]) -> list[Finding]:
                         suggested_fix="Remove sensitive values from logs or log only redacted metadata.",
                         frameworks=("SOC 2 CC7.2", "GDPR Art. 32"),
                         remediation_urgency="within-sprint",
-                    )
+                    ),
+                    line,
                 )
 
     return dedupe_findings(findings)
+
+
+def load_false_positive_exclusions(branch: str) -> list[FalsePositiveExclusion]:
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "origin", f"{branch}:refs/remotes/origin/{branch}"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["git", "show", f"origin/{branch}:{FALSE_POSITIVE_EXCLUSIONS_FILE}"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        print(f"GuardianCI ignored invalid false-positive exclusions JSON: {exc}")
+        return []
+
+    raw_exclusions = payload.get("exclusions", payload) if isinstance(payload, dict) else payload
+    if not isinstance(raw_exclusions, list):
+        return []
+
+    exclusions: list[FalsePositiveExclusion] = []
+    for item in raw_exclusions:
+        if not isinstance(item, dict) or item.get("active") is False:
+            continue
+        file_pattern = str(item.get("file_pattern") or "").strip()
+        issue_type = str(item.get("issue_type") or "").strip()
+        context_hash = str(item.get("code_context_hash") or "").strip()
+        if not file_pattern or not issue_type:
+            continue
+        exclusions.append(
+            FalsePositiveExclusion(
+                file_pattern=file_pattern,
+                issue_type=issue_type,
+                code_context_hash=context_hash,
+                dismissed_by=str(item.get("dismissed_by") or "").strip(),
+                timestamp=str(item.get("timestamp") or "").strip(),
+            )
+        )
+
+    if exclusions:
+        print(f"GuardianCI loaded {len(exclusions)} false-positive exclusion(s).")
+    return exclusions
+
+
+def added_context_hashes(patches: list[tuple[str, str]]) -> dict[tuple[str, int], str]:
+    return {
+        (file_path, line_no): code_context_hash(line)
+        for path, patch in patches
+        for file_path, line_no, line in iter_added_lines(path, patch)
+    }
+
+
+def code_context_hash(value: str) -> str:
+    normalized = re.sub(r"\s+", " ", value.strip())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+
+
+def finding_matches_exclusion(
+    finding: Finding,
+    exclusions: list[FalsePositiveExclusion],
+    context_hash: str = "",
+) -> bool:
+    issue = finding.issue.lower()
+    for exclusion in exclusions:
+        if not fnmatch.fnmatch(finding.file, exclusion.file_pattern):
+            continue
+        if exclusion.issue_type.lower() not in issue:
+            continue
+        if exclusion.code_context_hash and exclusion.code_context_hash != context_hash:
+            continue
+        return True
+    return False
+
+
+def filter_excluded_findings(
+    findings: list[Finding],
+    exclusions: list[FalsePositiveExclusion],
+    added_line_hashes: dict[tuple[str, int], str],
+) -> list[Finding]:
+    if not exclusions:
+        return findings
+
+    kept: list[Finding] = []
+    for finding in findings:
+        context_hash = added_line_hashes.get((finding.file, finding.line_start), "")
+        if finding_matches_exclusion(finding, exclusions, context_hash):
+            print(
+                "GuardianCI suppressed known false positive: "
+                f"{finding.file}:{finding.line_start} {finding.issue}"
+            )
+            continue
+        kept.append(finding)
+    return kept
+
+
+def format_false_positive_exclusions(exclusions: list[FalsePositiveExclusion]) -> str:
+    if not exclusions:
+        return ""
+
+    lines = [
+        "Known false positives already dismissed for this codebase. Do not report a finding "
+        "when the file pattern, issue type, and code context hash match one of these records:"
+    ]
+    for exclusion in exclusions[:20]:
+        lines.append(
+            "- "
+            f"file_pattern={exclusion.file_pattern}; "
+            f"issue_type={exclusion.issue_type}; "
+            f"code_context_hash={exclusion.code_context_hash or 'not-required'}"
+        )
+    if len(exclusions) > 20:
+        lines.append(f"- ... {len(exclusions) - 20} more exclusion(s) omitted from prompt")
+    return "\n".join(lines)
 
 
 def dedupe_findings(findings: list[Finding]) -> list[Finding]:
@@ -578,7 +744,13 @@ def merge_findings(first: list[Finding], second: list[Finding]) -> list[Finding]
     return dedupe_findings([*first, *second])
 
 
-def call_gemini(diff_text: str, *, truncated: bool, model: str) -> Any:
+def call_gemini(
+    diff_text: str,
+    *,
+    truncated: bool,
+    model: str,
+    exclusions: list[FalsePositiveExclusion] | None = None,
+) -> Any:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set.")
@@ -592,7 +764,7 @@ def call_gemini(diff_text: str, *, truncated: bool, model: str) -> Any:
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=model,
-        contents=user_prompt(diff_text, truncated=truncated),
+        contents=user_prompt(diff_text, truncated=truncated, exclusions=exclusions or []),
         config=types.GenerateContentConfig(
             system_instruction=system_prompt(),
             response_mime_type="application/json",
@@ -613,12 +785,19 @@ def system_prompt() -> str:
     )
 
 
-def user_prompt(diff_text: str, *, truncated: bool) -> str:
+def user_prompt(
+    diff_text: str,
+    *,
+    truncated: bool,
+    exclusions: list[FalsePositiveExclusion] | None = None,
+) -> str:
     truncation_note = (
         "The diff was truncated to fit the review budget; mention only findings visible below.\n"
         if truncated
         else ""
     )
+    exclusion_note = format_false_positive_exclusions(exclusions or [])
+    exclusion_block = f"\n\n{exclusion_note}\n" if exclusion_note else ""
     return f"""
 {truncation_note}
 Review this PR diff for:
@@ -653,6 +832,7 @@ Return JSON in this exact shape:
 
 If there are no findings, return {{"findings": []}}.
 Only use new-file line numbers from the diff. Only report issues on changed lines.
+{exclusion_block}
 
 DIFF:
 {diff_text}
