@@ -143,7 +143,11 @@ def wait_for_health(url: str, *, timeout_seconds: int, interval: int) -> None:
 def parse_coverage(path: Path) -> float | None:
     if not path.exists():
         return None
-    root = ET.fromstring(path.read_text(encoding="utf-8"))
+    try:
+        root = ET.fromstring(path.read_text(encoding="utf-8"))
+    except ET.ParseError:
+        print("GuardianCI deploy: coverage.xml could not be parsed; coverage will be omitted.")
+        return None
     line_rate = root.attrib.get("line-rate")
     if line_rate is None:
         return None

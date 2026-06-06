@@ -90,3 +90,14 @@ def test_notify_slack_is_non_blocking(monkeypatch) -> None:
     monkeypatch.setattr(deploy, "post_json", fake_post_json)
 
     deploy.notify_slack("https://slack.example/webhook", "hello")
+
+
+def test_parse_coverage_returns_none_for_missing_file(tmp_path: Path) -> None:
+    assert deploy.parse_coverage(tmp_path / "nonexistent.xml") is None
+
+
+def test_parse_coverage_returns_none_for_malformed_xml(tmp_path: Path) -> None:
+    coverage = tmp_path / "coverage.xml"
+    coverage.write_text("<coverage line-rate=", encoding="utf-8")
+
+    assert deploy.parse_coverage(coverage) is None
