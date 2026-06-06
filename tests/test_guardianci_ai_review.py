@@ -192,6 +192,62 @@ def test_local_security_findings_suppresses_matching_false_positive() -> None:
     assert findings == []
 
 
+def test_filter_excluded_findings_suppresses_matching_and_keeps_others() -> None:
+    exclusions = [
+        review.FalsePositiveExclusion(
+            file_pattern="app/api.py",
+            issue_type="TLS certificate verification is disabled.",
+            code_context_hash="abc123",
+        )
+    ]
+    findings = [
+        review.Finding(
+            file="app/api.py",
+            line_start=10,
+            line_end=10,
+            severity="WARN",
+            issue="TLS certificate verification is disabled.",
+            suggested_fix="Remove verify=False.",
+        ),
+        review.Finding(
+            file="app/api.py",
+            line_start=20,
+            line_end=20,
+            severity="CRITICAL",
+            issue="Hardcoded secret.",
+            suggested_fix="Use env vars.",
+        ),
+    ]
+    hashes = {("app/api.py", 10): "abc123", ("app/api.py", 20): "xyz789"}
+
+    kept = review.filter_excluded_findings(findings, exclusions, hashes)
+
+    assert len(kept) == 1
+    assert kept[0].issue == "Hardcoded secret."
+
+
+def test_filter_excluded_findings_skips_hash_check_when_exclusion_hash_empty() -> None:
+    exclusions = [
+        review.FalsePositiveExclusion(
+            file_pattern="app/api.py",
+            issue_type="TLS certificate verification is disabled.",
+            code_context_hash="",
+        )
+    ]
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=10,
+        line_end=10,
+        severity="WARN",
+        issue="TLS certificate verification is disabled.",
+        suggested_fix="Remove verify=False.",
+    )
+
+    kept = review.filter_excluded_findings([finding], exclusions, {})
+
+    assert kept == []
+
+
 def test_merge_findings_deduplicates_matching_items() -> None:
     finding = review.Finding(
         file="app/api.py",
