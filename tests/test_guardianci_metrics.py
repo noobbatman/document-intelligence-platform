@@ -85,5 +85,24 @@ def test_render_dashboard_contains_summary_values() -> None:
     assert "app/api.py" in html
 
 
+def test_render_dashboard_escapes_ai_controlled_values() -> None:
+    html = metrics.render_dashboard(
+        {
+            "generated_at": "<script>alert(1)</script>",
+            "rolling_30_day_score": 92,
+            "total_prs_reviewed": 3,
+            "total_findings": 1,
+            "severity_breakdown": {"<img src=x onerror=alert(1)>": 1},
+            "top_vulnerable_modules": [
+                {"file": "<script>alert(1)</script>", "findings": "<b>1</b>"}
+            ],
+        }
+    )
+
+    assert "<script>alert(1)</script>" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "&lt;b&gt;1&lt;/b&gt;" in html
+
+
 def test_safe_slug_normalizes_file_name_parts() -> None:
     assert metrics.safe_slug("2026-06-06T10:00:00Z") == "2026-06-06t10-00-00z"

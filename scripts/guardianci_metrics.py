@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import subprocess
 from collections import Counter
@@ -68,19 +69,7 @@ def ensure_metrics_branch(branch: str) -> None:
         return
 
     run_git(["checkout", "--orphan", branch])
-    for path in list(Path(".").iterdir()):
-        if path.name == ".git":
-            continue
-        remove_path(path)
-
-
-def remove_path(path: Path) -> None:
-    if path.is_dir():
-        for child in path.iterdir():
-            remove_path(child)
-        path.rmdir()
-    else:
-        path.unlink()
+    run_git(["rm", "-rf", "."])
 
 
 def write_review_record(result: dict[str, Any]) -> Path:
@@ -163,7 +152,12 @@ def render_badge(summary: dict[str, Any]) -> str:
 
 
 def render_dashboard(summary: dict[str, Any]) -> str:
-    summary_json = json.dumps(summary, indent=2)
+    summary_json = html.escape(json.dumps(summary, indent=2))
+    generated_at = html.escape(str(summary.get("generated_at", "")))
+    rolling_score = html.escape(str(summary.get("rolling_30_day_score", "")))
+    total_prs = html.escape(str(summary.get("total_prs_reviewed", "")))
+    total_findings = html.escape(str(summary.get("total_findings", "")))
+    severity_breakdown = html.escape(json.dumps(summary.get("severity_breakdown", {}), indent=2))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -182,17 +176,17 @@ def render_dashboard(summary: dict[str, Any]) -> str:
 </head>
 <body>
   <h1>GuardianCI Security Dashboard</h1>
-  <p>Generated at {summary.get("generated_at")}</p>
-  <div class="score">{summary.get("rolling_30_day_score")}/100</div>
+  <p>Generated at {generated_at}</p>
+  <div class="score">{rolling_score}/100</div>
   <div class="grid">
     <section>
       <h2>Findings</h2>
-      <p>Total PRs reviewed: {summary.get("total_prs_reviewed")}</p>
-      <p>Total findings: {summary.get("total_findings")}</p>
+      <p>Total PRs reviewed: {total_prs}</p>
+      <p>Total findings: {total_findings}</p>
     </section>
     <section>
       <h2>Severity</h2>
-      <pre>{json.dumps(summary.get("severity_breakdown", {}), indent=2)}</pre>
+      <pre>{severity_breakdown}</pre>
     </section>
   </div>
   <section>
@@ -212,7 +206,11 @@ def render_dashboard(summary: dict[str, Any]) -> str:
 
 def render_rows(items: list[dict[str, Any]], key: str) -> str:
     return "\n".join(
-        f"<tr><td>{item.get(key)}</td><td>{item.get('findings')}</td></tr>" for item in items
+        (
+            f"<tr><td>{html.escape(str(item.get(key, '')))}</td>"
+            f"<td>{html.escape(str(item.get('findings', '')))}</td></tr>"
+        )
+        for item in items
     )
 
 

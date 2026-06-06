@@ -206,6 +206,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Download GuardianCI review result
         uses: actions/download-artifact@v4
         continue-on-error: true
