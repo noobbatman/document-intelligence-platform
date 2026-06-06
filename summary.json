@@ -1,11 +1,19 @@
 {
-  "generated_at": "2026-06-06T18:29:21.257581Z",
+  "generated_at": "2026-06-06T18:42:51.264679Z",
   "recent_reviews": [
     {
       "pr_number": 8,
       "score": 100,
       "sha": "5460558224aa2c9471bf0fa94826e8b3733718ac",
       "timestamp": "2026-06-06T18:29:09.067456Z",
+      "total_critical": 0,
+      "total_warn": 0
+    },
+    {
+      "pr_number": 8,
+      "score": 100,
+      "sha": "fd79d7fb44b49a276346e901d8ea8d56ec0bdfc2",
+      "timestamp": "2026-06-06T18:42:40.401767Z",
       "total_critical": 0,
       "total_warn": 0
     }
@@ -16,5 +24,5 @@
   "top_frameworks": [],
   "top_vulnerable_modules": [],
   "total_findings": 0,
-  "total_prs_reviewed": 1
+  "total_prs_reviewed": 2
 }
