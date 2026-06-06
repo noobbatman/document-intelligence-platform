@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 import app.core.http_runtime as _runtime_module
+import app.db.models as _models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.http_runtime import (
@@ -27,12 +28,21 @@ from app.core.http_runtime import (
 )
 from app.core.logging import configure_logging
 from app.core.metrics import http_request_duration_seconds, http_requests_total
+from app.db.base import Base
+from app.db.session import engine
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
-    _runtime_module.rate_limiter = build_rate_limiter(get_settings())
+    settings = get_settings()
+    # Auto-create tables only for SQLite (local dev / Render free-tier).
+    # SQLite is single-process, so create_all is safe.
+    # For PostgreSQL deployments, apply Alembic migrations instead
+    # (e.g. run `alembic upgrade head` as a prestart step).
+    if settings.database_url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
+    _runtime_module.rate_limiter = build_rate_limiter(settings)
     yield
 
 
