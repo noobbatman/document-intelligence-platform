@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-06T23:10:02.211126Z",
+  "generated_at": "2026-06-06T23:16:39.349815Z",
   "recent_reviews": [
     {
       "pr_number": 8,
@@ -80,9 +80,17 @@
       "timestamp": "2026-06-06T23:09:48.879024Z",
       "total_critical": 0,
       "total_warn": 0
+    },
+    {
+      "pr_number": 13,
+      "score": 100,
+      "sha": "d8878530dacedafdcb2af3bd650a64db72ca020f",
+      "timestamp": "2026-06-06T23:16:30.773555Z",
+      "total_critical": 0,
+      "total_warn": 0
     }
   ],
-  "rolling_30_day_score": 98.0,
+  "rolling_30_day_score": 98.18,
   "schema_version": 1,
   "severity_breakdown": {
     "CRITICAL": 1
@@ -104,5 +112,5 @@
     }
   ],
   "total_findings": 1,
-  "total_prs_reviewed": 10
+  "total_prs_reviewed": 11
 }
