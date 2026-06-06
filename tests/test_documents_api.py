@@ -52,12 +52,14 @@ def test_readiness_returns_503_when_db_unavailable(client) -> None:
     assert data["database"] == "error"
 
 
-def test_readiness_returns_503_when_redis_unavailable(client) -> None:
+def test_readiness_returns_200_degraded_when_redis_unavailable(client) -> None:
+    # Redis is optional: its absence degrades but does not prevent the API
+    # from serving requests, so the endpoint returns 200 with status=degraded.
     with patch("redis.from_url") as redis_from_url:
         redis_from_url.return_value.ping.side_effect = RuntimeError("redis unavailable")
         response = client.get("/api/v1/health/ready")
 
-    assert response.status_code == 503
+    assert response.status_code == 200
     data = response.json()
     assert data["status"] == "degraded"
     assert data["redis"] == "error"

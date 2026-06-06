@@ -25,7 +25,14 @@ def liveness() -> dict:
 
 @router.get("/health/ready")
 def readiness(db: Session = DB_DEP) -> dict:
-    """Readiness probe — confirms database and Redis are reachable."""
+    """Readiness probe — confirms the database is reachable.
+
+    Returns 200 with status=ok when all checks pass.
+    Returns 200 with status=degraded when Redis is unavailable (Redis backs
+    rate-limiting and Celery; its absence does not prevent the core API from
+    serving requests).
+    Returns 503 when the database is unavailable.
+    """
     checks: dict[str, str] = {}
 
     try:
