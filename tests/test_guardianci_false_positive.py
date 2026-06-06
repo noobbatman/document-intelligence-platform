@@ -13,6 +13,7 @@ SPEC.loader.exec_module(fp)
 
 def test_false_positive_command_detection() -> None:
     assert fp.is_false_positive_command("/fp")
+    assert fp.is_false_positive_command("/FP")
     assert fp.is_false_positive_command("/fp this is safe here")
     assert not fp.is_false_positive_command("/fix")
     assert not fp.is_false_positive_command("please /fp")
@@ -44,6 +45,23 @@ def test_exclusion_record_extracts_guardianci_inline_comment() -> None:
     assert record["code_context_hash"] == fp.code_context_hash(line)
     assert record["dismissed_by"] == "noobbatman"
     assert record["source_pr_number"] == 42
+
+
+def test_exclusion_record_requires_target_code_context() -> None:
+    target = {
+        "id": 12345,
+        "path": "app/api/demo.py",
+        "line": 7,
+        "diff_hunk": "@@ -1,1 +1,1 @@\n def endpoint():",
+        "body": (
+            "**GuardianCI CRITICAL**\n\n"
+            "Possible hardcoded secret or API key added in this change.\n\n"
+            "Suggested fix: Move the value into a GitHub secret or environment variable."
+        ),
+    }
+    context = {"sender": "noobbatman", "pr_number": 42}
+
+    assert fp.exclusion_record(context, target) is None
 
 
 def test_render_audit_body_lists_active_exclusions() -> None:

@@ -162,7 +162,7 @@ def exclusion_record(context: dict[str, Any], target: dict[str, Any]) -> dict[st
     issue_type = extract_issue_type(body)
     file_path = str(target.get("path") or "").strip()
     code_context = target_code_context(target)
-    if not issue_type or not file_path:
+    if not issue_type or not file_path or not code_context:
         return None
 
     return {
@@ -170,7 +170,7 @@ def exclusion_record(context: dict[str, Any], target: dict[str, Any]) -> dict[st
         "active": True,
         "file_pattern": file_path,
         "issue_type": issue_type,
-        "code_context_hash": code_context_hash(code_context) if code_context else "",
+        "code_context_hash": code_context_hash(code_context),
         "dismissed_by": context["sender"],
         "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "source_pr_number": context["pr_number"],
