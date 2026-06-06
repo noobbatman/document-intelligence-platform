@@ -35,12 +35,14 @@ from app.db.session import engine
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging()
-    # Create all tables that do not yet exist.  This is intentionally idempotent
-    # (existing tables are never dropped or altered) so it is safe on every start.
-    # For production PostgreSQL, replace this with `alembic upgrade head` in the
-    # container startup command once Alembic migrations are introduced.
-    Base.metadata.create_all(bind=engine)
-    _runtime_module.rate_limiter = build_rate_limiter(get_settings())
+    settings = get_settings()
+    # Auto-create tables only for SQLite (local dev / Render free-tier).
+    # SQLite is single-process, so create_all is safe.
+    # For PostgreSQL deployments, apply Alembic migrations instead
+    # (e.g. run `alembic upgrade head` as a prestart step).
+    if settings.database_url.startswith("sqlite"):
+        Base.metadata.create_all(bind=engine)
+    _runtime_module.rate_limiter = build_rate_limiter(settings)
     yield
 
 
