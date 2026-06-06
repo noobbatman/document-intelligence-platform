@@ -321,7 +321,6 @@ jobs:
       - name: Trigger Railway deploy
         env:
           DEPLOY_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RAILWAY_WEBHOOK_URL: ${{ secrets.RAILWAY_WEBHOOK_URL }}
           RAILWAY_ROLLBACK_WEBHOOK_URL: ${{ secrets.RAILWAY_ROLLBACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

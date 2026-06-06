@@ -45,16 +45,14 @@ def main() -> int:
     review = read_json_file(Path(args.review_result))
     deployment = deployment_record(args.repo, args.sha, args.image, coverage, review)
 
+    # Rollback only fires when the deploy trigger or health check fails.
+    # Post-deploy side effects (metrics publish, Slack) never trigger rollback.
     try:
         trigger_deploy(webhook_url, deployment)
         if args.health_url:
             wait_for_health(
                 args.health_url, timeout_seconds=args.health_timeout, interval=args.health_interval
             )
-        publish_last_deploy(args.metrics_branch, deployment)
-        notify_slack(slack_webhook_url, slack_message(deployment, success=True))
-        print(f"GuardianCI deployed {args.image}.")
-        return 0
     except Exception as exc:
         rollback_message = attempt_rollback(rollback_webhook_url, previous, deployment)
         notify_slack(
@@ -65,6 +63,11 @@ def main() -> int:
         if rollback_message:
             print(rollback_message)
         return 1
+
+    publish_last_deploy(args.metrics_branch, deployment)
+    notify_slack(slack_webhook_url, slack_message(deployment, success=True))
+    print(f"GuardianCI deployed {args.image}.")
+    return 0
 
 
 def deployment_record(
@@ -114,14 +117,17 @@ def attempt_rollback(
     if not previous_image:
         return "GuardianCI rollback skipped: no previous image tag was recorded."
 
-    post_json(
-        rollback_webhook_url,
-        {
-            "image": previous_image,
-            "failed_image": failed_deployment["image"],
-            "source": "GuardianCI rollback",
-        },
-    )
+    try:
+        post_json(
+            rollback_webhook_url,
+            {
+                "image": previous_image,
+                "failed_image": failed_deployment["image"],
+                "source": "GuardianCI rollback",
+            },
+        )
+    except Exception as exc:
+        return f"GuardianCI rollback attempt failed: {exc}"
     return f"GuardianCI rollback triggered for previous image {previous_image}."
 
 
@@ -151,7 +157,11 @@ def parse_coverage(path: Path) -> float | None:
     line_rate = root.attrib.get("line-rate")
     if line_rate is None:
         return None
-    return round(float(line_rate) * 100, 2)
+    try:
+        return round(float(line_rate) * 100, 2)
+    except (TypeError, ValueError):
+        print("GuardianCI deploy: invalid coverage line-rate; coverage will be omitted.")
+        return None
 
 
 def read_json_file(path: Path) -> dict[str, Any]:
@@ -247,9 +257,15 @@ def post_json(url: str, payload: dict[str, Any]) -> None:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=20) as response:
-        if not 200 <= response.status < 300:
-            raise RuntimeError(f"POST {url} returned HTTP {response.status}")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            if not 200 <= response.status < 300:
+                # Do not include the URL — it may contain webhook secrets.
+                raise RuntimeError(f"POST returned HTTP {response.status}")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"POST returned HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"POST failed: {exc.reason}") from exc
 
 
 def ensure_git_identity() -> None:
