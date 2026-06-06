@@ -417,6 +417,7 @@ def test_write_review_result_serializes_metrics_payload(tmp_path: Path) -> None:
         truncated=True,
         gemini_ran=True,
         status="completed",
+        model="gemma-4-31b-it",
     )
 
     payload = review.json.loads(result_path.read_text(encoding="utf-8"))
@@ -424,6 +425,7 @@ def test_write_review_result_serializes_metrics_payload(tmp_path: Path) -> None:
     assert payload["sha"] == "abc123"
     assert payload["total_critical"] == 1
     assert payload["score"] == 80
+    assert payload["model"] == "gemma-4-31b-it"
     assert payload["findings"][0]["frameworks"] == ["PCI-DSS 6.2.4"]
 
 

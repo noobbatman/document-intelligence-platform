@@ -170,6 +170,7 @@ def main() -> int:
                 truncated=False,
                 gemini_ran=False,
                 status="no_relevant_files",
+                model=args.model,
             )
             if not args.auto_fix_only:
                 post_review(
@@ -206,6 +207,7 @@ def main() -> int:
             truncated=False,
             gemini_ran=True,
             status="parse_error",
+            model=args.model,
         )
         if args.auto_fix_only:
             print(f"GuardianCI auto-fix could not parse Gemini review JSON: {exc}")
@@ -230,6 +232,7 @@ def main() -> int:
                 truncated=False,
                 gemini_ran=True,
                 status="quota_or_rate_limited",
+                model=args.model,
             )
             if args.auto_fix_only:
                 print(f"GuardianCI auto-fix skipped due to quota/rate limit: {exc}")
@@ -255,6 +258,7 @@ def main() -> int:
             truncated=False,
             gemini_ran=False,
             status="failed",
+            model=args.model,
         )
         post_review(
             context,
@@ -273,6 +277,7 @@ def main() -> int:
         truncated=truncated,
         gemini_ran=gemini_ran,
         status="completed",
+        model=args.model,
     )
     if args.auto_fix_only:
         if not critical_findings:
@@ -1051,6 +1056,7 @@ def write_review_result(
     truncated: bool,
     gemini_ran: bool,
     status: str,
+    model: str | None = None,
 ) -> None:
     critical = sum(1 for finding in findings if finding.severity == "CRITICAL")
     warn = sum(1 for finding in findings if finding.severity == "WARN")
@@ -1061,7 +1067,7 @@ def write_review_result(
         "sha": context.get("head_sha") or os.getenv("GITHUB_SHA", ""),
         "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "status": status,
-        "model": os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
+        "model": model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
         "gemini_ran": gemini_ran,
         "truncated": truncated,
         "findings": [finding_to_dict(finding) for finding in findings],
