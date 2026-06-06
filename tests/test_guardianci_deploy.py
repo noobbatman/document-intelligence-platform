@@ -92,6 +92,25 @@ def test_notify_slack_is_non_blocking(monkeypatch) -> None:
     deploy.notify_slack("https://slack.example/webhook", "hello")
 
 
+def test_wait_for_health_startup_delay_is_skipped_when_zero(monkeypatch) -> None:
+    calls = []
+
+    def fake_urlopen(request, timeout=None):
+        calls.append(request)
+        raise RuntimeError("stop after first call")
+
+    monkeypatch.setattr(deploy.urllib.request, "urlopen", fake_urlopen)
+    slept = []
+    monkeypatch.setattr(deploy.time, "sleep", slept.append)
+
+    try:
+        deploy.wait_for_health("http://example.com", timeout_seconds=1, interval=1, startup_delay=0)
+    except RuntimeError:
+        pass
+
+    assert slept == [], "startup_delay=0 must not call time.sleep before polling"
+
+
 def test_parse_coverage_returns_none_for_missing_file(tmp_path: Path) -> None:
     assert deploy.parse_coverage(tmp_path / "nonexistent.xml") is None
 
