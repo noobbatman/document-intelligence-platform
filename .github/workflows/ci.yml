@@ -175,9 +175,51 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_MODEL: gemini-2.0-flash
-          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'false' }}
-        run: python scripts/guardianci_ai_review.py
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
+          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
+          GUARDIANCI_AUTOFIX_ENABLED: "false"
+        run: python scripts/guardianci_ai_review.py --review-only
+
+  auto-fix:
+    name: Auto-fix draft PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      - ai-review
+    if: ${{ always() && github.event_name == 'pull_request' && (vars.GUARDIANCI_AUTOFIX_ENABLED || 'true') == 'true' }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install AI review dependencies
+        run: uv pip install --system google-genai requests
+
+      - name: Prepare GuardianCI auto-fix draft PR
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
+          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
+          GUARDIANCI_AUTOFIX_ENABLED: ${{ vars.GUARDIANCI_AUTOFIX_ENABLED || 'true' }}
+        run: python scripts/guardianci_ai_review.py --auto-fix-only
 
   deploy:
     name: Deploy gate placeholder
