@@ -43,6 +43,7 @@ def readiness(db: Session = DB_DEP) -> dict:
     except Exception:
         checks["redis"] = "error"
 
+    db_ok = checks.get("database") == "ok"
     all_ok = all(value == "ok" for value in checks.values())
     payload = {
         "status": "ok" if all_ok else "degraded",
@@ -51,6 +52,9 @@ def readiness(db: Session = DB_DEP) -> dict:
         "storage_backend": settings.storage_backend,
         **checks,
     }
-    if all_ok:
+    # Redis is used for rate-limiting and Celery task queuing; its absence
+    # degrades but does not prevent the core API from serving requests.
+    # Only return 503 when the database is unavailable.
+    if db_ok:
         return payload
     return JSONResponse(status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
