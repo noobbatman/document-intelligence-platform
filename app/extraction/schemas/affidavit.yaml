@@ -1,0 +1,12 @@
+{
+  "document_type": "affidavit",
+  "llm_fill": true,
+  "fields": [
+    {"name": "declarant_name", "type": "string", "required": true, "description": "Affiant/declarant name", "patterns": ["(?:affidavit\\s+of|declaration\\s+of)\\s+([^\\n]{3,100})"]},
+    {"name": "declarant_role", "type": "string", "required": false, "description": "Declarant role", "patterns": ["(?:title|role|capacity)\\s*[:#\\-]?\\s*([^\\n]{3,80})"]},
+    {"name": "notary_name", "type": "string", "required": false, "description": "Notary name", "patterns": ["notary\\s+public\\s*[:#\\-]?\\s*([^\\n]{3,100})"]},
+    {"name": "notary_jurisdiction", "type": "string", "required": false, "description": "Notary jurisdiction", "patterns": ["(?:state|county|jurisdiction)\\s+of\\s+([A-Z][A-Za-z ,.'\\-]+)"]},
+    {"name": "execution_date", "type": "string", "required": false, "description": "Execution date", "patterns": ["(?:executed|sworn|dated)\\s*[:#\\-]?\\s*([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]},
+    {"name": "statement_summary", "type": "string", "required": false, "description": "Summary of sworn statement", "patterns": ["(?:states?|declares?)\\s+(?:as\\s+follows:)?\\s*(.{20,500})"]}
+  ]
+}

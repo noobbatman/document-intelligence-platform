@@ -1,0 +1,13 @@
+MASTER SERVICES AGREEMENT
+
+DEFINITIONS
+"Provider" means Northstar Analytics LLC. "Client" means Meridian Health Group.
+
+COMPENSATION
+Client shall pay Provider a monthly service fee of $18,000 for regulatory reporting support. Payment is due within fifteen days after receipt of invoice.
+
+CONFIDENTIALITY
+Provider shall not disclose Client patient data or trade secret material except as required by law.
+
+TERMINATION
+Either party may terminate this Agreement upon thirty days written notice.

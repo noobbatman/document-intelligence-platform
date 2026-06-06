@@ -1,0 +1,44 @@
+{
+  "_comment": "End-to-end example of the improvement loop: operator edit → extracted preference → injection into next draft",
+
+  "step_1_original_draft_section": {
+    "key": "jurisdiction_venue",
+    "title": "II. Jurisdiction and Venue",
+    "content": "Federal question jurisdiction is asserted under 28 U.S.C. § 1331 and 28 U.S.C. § 1343. Venue is asserted under 28 U.S.C. § 1391(b) on the basis that a substantial part of the events giving rise to the claims occurred in this district."
+  },
+
+  "step_2_operator_edit": {
+    "reviewer_name": "S. Whitmore",
+    "section_key": "jurisdiction_venue",
+    "edited_content": "Federal question jurisdiction is asserted under 28 U.S.C. § 1331 and 28 U.S.C. § 1343. Venue is asserted under 28 U.S.C. § 1391(b) on the basis that a substantial part of the events giving rise to the claims occurred in this district and that Defendant maintains branches and conducts substantial business in this district. Note: this district's personal jurisdiction over the Bank arises from its registered presence here — include this connection when discussing venue in future memos."
+  },
+
+  "step_3_preference_extracted_by_gemini": {
+    "preference_text": "When summarising venue in memos for cases involving nationally chartered banks, state both the geographical nexus of the events and the defendant bank's registered presence or branch operations in the district as independent bases supporting venue.",
+    "confidence": 0.87,
+    "document_type": "legal_complaint",
+    "source_section": "jurisdiction_venue"
+  },
+
+  "step_4_preference_injected_into_next_draft": {
+    "system_prompt_excerpt": "LEARNED PREFERENCES FROM PRIOR OPERATOR EDITS:\n- When summarising venue in memos for cases involving nationally chartered banks, state both the geographical nexus of the events and the defendant bank's registered presence or branch operations in the district as independent bases supporting venue.\n\nEXAMPLE (for reference):\n[ORIGINAL DRAFT EXCERPT]\nVenue is asserted under 28 U.S.C. § 1391(b) on the basis that a substantial part of the events giving rise to the claims occurred in this district.\n\n[HOW OPERATOR CORRECTED IT]\nVenue is asserted under 28 U.S.C. § 1391(b) on the basis that a substantial part of the events giving rise to the claims occurred in this district and that Defendant maintains branches and conducts substantial business in this district."
+  },
+
+  "step_5_next_draft_section_with_preference_applied": {
+    "key": "jurisdiction_venue",
+    "title": "II. Jurisdiction and Venue",
+    "content": "Federal question jurisdiction is asserted under 28 U.S.C. § 1331 in that this action arises under the laws of the United States, and under 28 U.S.C. § 1343 for claims arising under federal civil rights statutes. [Page 1 - JURISDICTION AND VENUE]\n\nVenue is proper in this district under 28 U.S.C. § 1391(b) because a substantial part of the events giving rise to the claims occurred here, and because Defendant First National Savings Bank maintains branch offices and conducts substantial banking business within this judicial district. [Page 1 - JURISDICTION AND VENUE]",
+    "confidence": "high",
+    "_note": "The second venue basis (branch operations in district) was added automatically based on the learned preference — it was not explicitly stated in the new document's source text but the defendant bank's district presence was confirmed in the factual allegations."
+  },
+
+  "step_6_effectiveness_scoring": {
+    "draft_reviewed": true,
+    "sections_in_draft": 6,
+    "sections_edited_by_operator": 0,
+    "edit_ratio": 0.0,
+    "score_delta": "+0.10",
+    "new_effectiveness_score": 0.87,
+    "_note": "The draft was accepted without edits. All applied preferences received +0.10. This preference now has effectiveness_score = 0.87."
+  }
+}

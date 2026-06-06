@@ -1,0 +1,34 @@
+{
+  "test_cases": [
+    {
+      "id": "smoke-payment-terms",
+      "query": "payment deadline monthly service fee",
+      "ground_truth": [
+        {
+          "file_path": "contracts/service_agreement.txt",
+          "text": "Client shall pay Provider a monthly service fee of $18,000 for regulatory reporting support. Payment is due within fifteen days after receipt of invoice."
+        }
+      ]
+    },
+    {
+      "id": "smoke-confidentiality",
+      "query": "disclosure of patient data trade secrets required by law",
+      "ground_truth": [
+        {
+          "file_path": "contracts/service_agreement.txt",
+          "text": "Provider shall not disclose Client patient data or trade secret material except as required by law."
+        }
+      ]
+    },
+    {
+      "id": "smoke-retention",
+      "query": "how long are audit logs preserved",
+      "ground_truth": [
+        {
+          "file_path": "contracts/privacy_policy.txt",
+          "text": "Audit logs are retained for two years unless a legal hold requires longer preservation."
+        }
+      ]
+    }
+  ]
+}

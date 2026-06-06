@@ -1,0 +1,21 @@
+{
+  "draft_type": "case_fact_summary",
+  "applicable_document_types": ["case_brief", "legal_complaint"],
+  "document_type_overrides": {
+    "case_brief": {
+      "support_terms": ["facts", "procedural history", "legal issue", "holding", "court", "jurisdiction", "statute"],
+      "instructions": ["Organize around facts, procedural posture, legal issues, holding, and authority cited."]
+    },
+    "legal_complaint": {
+      "support_terms": ["factual allegations", "count ", "cause of action", "jurisdiction", "venue", "prayer for relief"],
+      "instructions": ["Separate alleged facts from claims and requested relief; do not treat allegations as proven findings."]
+    }
+  },
+  "sections": [
+    {"key": "case_identification", "title": "Case Identification", "required": true, "query": "case name case number court parties filing date", "instruction": "Identify the case name, court, case number, parties, and filing or decision date."},
+    {"key": "procedural_posture", "title": "Procedural Posture", "required": false, "query": "procedural history posture filing decision appeal motion", "instruction": "Summarize the procedural posture using only source-supported facts."},
+    {"key": "material_facts", "title": "Material Facts", "required": true, "query": "facts background timeline events parties conduct", "instruction": "Summarize material facts chronologically and distinguish allegations from findings."},
+    {"key": "issues_claims", "title": "Issues or Claims", "required": true, "query": "legal issues claims causes of action counts questions presented", "instruction": "List legal issues, claims, or questions presented with cited statutory basis when available."},
+    {"key": "holding_or_requested_relief", "title": "Holding or Requested Relief", "required": false, "query": "holding ruling decision prayer for relief damages injunction declaratory relief", "instruction": "For case briefs, summarize the holding. For complaints, summarize requested relief."}
+  ]
+}

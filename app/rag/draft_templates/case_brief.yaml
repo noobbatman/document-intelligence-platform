@@ -1,0 +1,17 @@
+{
+  "draft_type": "case_brief",
+  "applicable_document_types": ["case_brief"],
+  "document_type_overrides": {
+    "case_brief": {
+      "support_terms": ["case name", "court", "holding", "legal issue", "procedural history", "statute", "precedent"],
+      "instructions": ["Generate a conventional case brief with facts, issue, rule, holding, and reasoning when supported."]
+    }
+  },
+  "sections": [
+    {"key": "caption", "title": "Caption", "required": true, "query": "case name court case number parties", "instruction": "Identify case name, court, docket, and parties."},
+    {"key": "facts", "title": "Facts", "required": true, "query": "facts background events parties conduct", "instruction": "Summarize key facts."},
+    {"key": "issue", "title": "Issue", "required": true, "query": "issue question presented legal issue", "instruction": "State the legal issue as a question if possible."},
+    {"key": "holding", "title": "Holding", "required": true, "query": "holding ruling decision judgment", "instruction": "State the court's holding or decision."},
+    {"key": "reasoning", "title": "Reasoning", "required": false, "query": "reasoning analysis rule statute precedent", "instruction": "Summarize the reasoning and authority cited."}
+  ]
+}

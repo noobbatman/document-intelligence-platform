@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-06-06T18:29:21.257581Z",
+  "recent_reviews": [
+    {
+      "pr_number": 8,
+      "score": 100,
+      "sha": "5460558224aa2c9471bf0fa94826e8b3733718ac",
+      "timestamp": "2026-06-06T18:29:09.067456Z",
+      "total_critical": 0,
+      "total_warn": 0
+    }
+  ],
+  "rolling_30_day_score": 100.0,
+  "schema_version": 1,
+  "severity_breakdown": {},
+  "top_frameworks": [],
+  "top_vulnerable_modules": [],
+  "total_findings": 0,
+  "total_prs_reviewed": 1
+}

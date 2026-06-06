@@ -1,0 +1,16 @@
+{
+  "draft_type": "affidavit_summary",
+  "applicable_document_types": ["affidavit"],
+  "document_type_overrides": {
+    "affidavit": {
+      "support_terms": ["affidavit", "declaration", "affiant", "declarant", "sworn", "notary", "subscribed", "under penalty of perjury"],
+      "instructions": ["Focus on who made the statement, what was sworn, execution date, and notarization details."]
+    }
+  },
+  "sections": [
+    {"key": "affidavit_overview", "title": "Affidavit Overview", "required": true, "query": "affidavit declaration affiant declarant role execution date", "instruction": "Identify the declarant, role, execution date, and purpose of the affidavit."},
+    {"key": "sworn_statements", "title": "Sworn Statements", "required": true, "query": "states declares sworn statement facts", "instruction": "Summarize the main sworn factual statements."},
+    {"key": "notarization", "title": "Notarization and Execution", "required": false, "query": "notary public subscribed sworn county state commission execution date", "instruction": "Summarize notarization, jurisdiction, signature, and execution details."},
+    {"key": "gaps", "title": "Missing or Unclear Items", "required": false, "query": "missing blank unsigned undated unsupported", "instruction": "Identify missing dates, signatures, notary information, or unsupported facts."}
+  ]
+}

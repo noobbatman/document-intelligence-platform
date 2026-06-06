@@ -1,0 +1,13 @@
+{
+  "draft_type": "contract_summary",
+  "applicable_document_types": ["contract"],
+  "defaults": {},
+  "sections": [
+    {"key": "parties", "title": "Parties", "required": true, "query": "contracting parties roles addresses", "instruction": "Identify parties and roles."},
+    {"key": "term", "title": "Term and Dates", "required": false, "query": "effective date term duration renewal termination date", "instruction": "Summarize effective date, term, renewal, and termination timing."},
+    {"key": "payment_terms", "title": "Payment Terms", "required": false, "query": "payment compensation remuneration schedule amounts consideration", "instruction": "Summarize payment obligations and consideration."},
+    {"key": "termination", "title": "Termination", "required": false, "query": "termination notice period breach cure", "instruction": "Summarize termination rights and notice periods."},
+    {"key": "confidentiality_ip", "title": "Confidentiality and IP", "required": false, "query": "confidentiality non disclosure intellectual property ownership assignment", "instruction": "Summarize confidentiality and intellectual-property provisions."},
+    {"key": "liability_disputes", "title": "Liability and Disputes", "required": false, "query": "indemnification liability limitation governing law arbitration jurisdiction", "instruction": "Summarize indemnity, liability, dispute resolution, and governing law."}
+  ]
+}

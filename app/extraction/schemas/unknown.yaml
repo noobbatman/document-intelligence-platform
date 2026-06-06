@@ -1,0 +1,10 @@
+{
+  "document_type": "unknown",
+  "llm_fill": true,
+  "fields": [
+    {"name": "inferred_document_type", "type": "string", "required": false, "description": "Best-effort document type inferred from the text", "patterns": []},
+    {"name": "summary", "type": "string", "required": false, "description": "Short summary of the document", "patterns": []},
+    {"name": "key_parties", "type": "list", "required": false, "description": "People or organizations central to the document", "patterns": []},
+    {"name": "important_dates", "type": "list", "required": false, "description": "Important dates found in the document", "patterns": ["([A-Za-z]+\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4})"]}
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "document_type": "case_brief",
+  "llm_fill": true,
+  "fields": [
+    {"name": "case_name", "type": "string", "required": true, "description": "Case name", "patterns": ["\\b([A-Z][A-Za-z0-9 .,'&\\-]+\\s+v\\.?\\s+[A-Z][A-Za-z0-9 .,'&\\-]+)\\b"]},
+    {"name": "case_number", "type": "string", "required": false, "description": "Case number", "patterns": ["(?:case|docket)\\s*(?:no\\.?|number|#)\\s*[:#]?\\s*([A-Z0-9:\\-\\/\\.]+)"]},
+    {"name": "court", "type": "string", "required": false, "description": "Court", "patterns": ["((?:UNITED\\s+STATES\\s+)?[A-Z][A-Za-z ]+\\s+Court[^\\n]{0,100})"]},
+    {"name": "jurisdiction", "type": "string", "required": false, "description": "Jurisdiction", "patterns": ["jurisdiction\\s*[:#\\-]?\\s*([^\\n]{3,80})"]},
+    {"name": "legal_issues", "type": "list", "required": false, "all_matches": true, "description": "Legal issues", "patterns": ["(?:issue|question presented)\\s*[:#\\-]?\\s*([^\\n?]+\\?)"]},
+    {"name": "holding", "type": "string", "required": false, "description": "Court holding", "patterns": ["holding\\s*[:#\\-]?\\s*([^\\n]{10,400})"]},
+    {"name": "cited_statutes", "type": "list", "required": false, "all_matches": true, "description": "Statutes cited", "patterns": ["\\b(\\d+\\s+U\\.S\\.C\\.?\\s+§+\\s*[\\w\\-.()]+)", "\\b([A-Z][A-Za-z ]{2,80}\\s+Act)\\b"]}
+  ]
+}

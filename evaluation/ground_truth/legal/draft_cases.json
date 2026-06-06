@@ -1,0 +1,69 @@
+[
+  {
+    "draft": {
+      "sections": [
+        {
+          "key": "payment_terms",
+          "title": "Payment Terms",
+          "content": "Globex Inc must pay Acme Corp $10,000 within thirty days after receipt of invoice [Page 1 - PAYMENT TERMS].",
+          "evidence_chunk_ids": ["contract-payment"],
+          "confidence": "high"
+        },
+        {
+          "key": "governing_law",
+          "title": "Governing Law",
+          "content": "The agreement is governed by New York law, with venue in New York County [Page 1 - GOVERNING LAW].",
+          "evidence_chunk_ids": ["contract-governing-law"],
+          "confidence": "high"
+        }
+      ]
+    },
+    "reference": {
+      "sections": [
+        {
+          "key": "payment_terms",
+          "content": "Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice."
+        },
+        {
+          "key": "governing_law",
+          "content": "The agreement is governed by New York law and venue lies in New York County."
+        }
+      ]
+    },
+    "evidence": {
+      "contract-payment": "PAYMENT TERMS Globex Inc shall pay Acme Corp $10,000 within thirty days after receipt of invoice.",
+      "contract-governing-law": "GOVERNING LAW This agreement is governed by the laws of New York and venue shall lie in New York County."
+    }
+  },
+  {
+    "draft": {
+      "sections": [
+        {
+          "key": "required_actions",
+          "title": "Required Actions",
+          "content": "Northwind Traders must stop using the ACME mark and remove infringing materials within ten days [Page 1 - REQUIRED ACTIONS].",
+          "evidence_chunk_ids": ["notice-actions"],
+          "confidence": "high"
+        },
+        {
+          "key": "settlement_offer",
+          "title": "Settlement Offer",
+          "content": "[UNSUPPORTED: No settlement offer appears in the source notice]",
+          "evidence_chunk_ids": [],
+          "confidence": "unsupported"
+        }
+      ]
+    },
+    "reference": {
+      "sections": [
+        {
+          "key": "required_actions",
+          "content": "Northwind Traders must stop using the ACME mark and remove infringing materials within ten days."
+        }
+      ]
+    },
+    "evidence": {
+      "notice-actions": "REQUIRED ACTIONS Northwind Traders must stop using the ACME mark and remove infringing materials within ten days."
+    }
+  }
+]

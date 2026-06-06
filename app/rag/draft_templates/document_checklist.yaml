@@ -1,0 +1,9 @@
+{
+  "draft_type": "document_checklist",
+  "applicable_document_types": ["contract", "legal_complaint", "legal_notice", "unknown"],
+  "defaults": {},
+  "sections": [
+    {"key": "required_items", "title": "Required Items", "required": true, "query": "required signatures execution dates exhibits attachments schedules deadlines", "instruction": "List required signatures, dates, exhibits, schedules, and deadlines."},
+    {"key": "missing_items", "title": "Missing or Incomplete Items", "required": true, "query": "missing incomplete blank unsigned undated unsupported", "instruction": "Identify missing or incomplete items, using unsupported markers when source material lacks the answer."}
+  ]
+}

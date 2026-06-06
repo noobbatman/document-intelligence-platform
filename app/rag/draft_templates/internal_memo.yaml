@@ -1,0 +1,14 @@
+{
+  "draft_type": "internal_memo",
+  "applicable_document_types": ["legal_complaint", "contract", "legal_notice", "case_brief", "unknown"],
+  "defaults": {"to": "Senior Partner", "from": "Legal Document Analyst", "date": "{{draft_date}}"},
+  "sections": [
+    {"key": "memo_header", "title": "MEMORANDUM", "required": true, "query": "case caption parties filing date subject", "instruction": "Use TO, FROM, DATE, and SUBJECT metadata. Do not mark TO/FROM unsupported."},
+    {"key": "case_overview", "title": "I. Case Overview", "required": true, "query": "case caption plaintiffs defendants court case number claims filing date", "instruction": "Identify court, parties, case number, filing date, and document posture."},
+    {"key": "jurisdiction_venue", "title": "II. Jurisdiction and Venue", "required": false, "query": "jurisdiction venue 28 U.S.C. 1331 1343 1391", "instruction": "Summarize jurisdiction and venue statutes and factual venue basis."},
+    {"key": "factual_background", "title": "III. Factual Background", "required": true, "query": "factual allegations timeline accounts subpoena hold actions defendants", "instruction": "Summarize material facts chronologically."},
+    {"key": "claims_asserted", "title": "IV. Claims Asserted", "required": true, "query": "count cause of action RFPA conspiracy negligence statutory basis factual basis", "instruction": "Enumerate each count/cause of action by count number or title, include statute or legal basis, and summarize the specific factual basis alleged for each count."},
+    {"key": "relief_sought", "title": "V. Relief Sought", "required": true, "query": "prayer for relief wherefore damages declaratory injunctive litigation hold", "instruction": "List requested damages, declarations, injunctions, preservation orders, and other relief."},
+    {"key": "risks_gaps", "title": "VI. Risks and Gaps", "required": false, "query": "unsupported missing limitations tolling defenses procedural issues", "instruction": "State only source-supported risks or gaps; mark absent information unsupported."}
+  ]
+}

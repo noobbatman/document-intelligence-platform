@@ -1,0 +1,74 @@
+%PDF-1.4
+1 0 obj
+<</Type /Catalog /Pages 2 0 R>>
+endobj
+2 0 obj
+<</Type /Pages /Kids [3 0 R] /Count 1>>
+endobj
+3 0 obj
+<</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources <</Font <</F1 5 0 R>>>>>>
+endobj
+4 0 obj
+<</Length 1709>>
+stream
+BT
+/F1 11 Tf
+50 750 Td
+14 TL
+(SERVICE AGREEMENT) Tj T*
+() Tj T*
+(This Agreement is entered into as of 1 January 2024 \(the Effective Date\)) Tj T*
+(between the following parties:) Tj T*
+() Tj T*
+(Party A: Acme Software Ltd, a company incorporated in England and Wales) Tj T*
+(         \(Company No. 09876543\), 10 Tech Park, London EC1A 1BB) Tj T*
+() Tj T*
+(Party B: Globex Corp, a company incorporated in England and Wales) Tj T*
+(         \(Company No. 01234567\), 200 Finance Ave, Manchester M1 2AB) Tj T*
+() Tj T*
+(WHEREAS, Party A wishes to provide software development services and) Tj T*
+(Party B wishes to engage such services on the terms set out herein.) Tj T*
+() Tj T*
+(1. TERM AND TERMINATION) Tj T*
+(   This Agreement shall commence on the Effective Date and continue) Tj T*
+(   until the Termination Date of 31 December 2024, unless terminated) Tj T*
+(   earlier in accordance with this Agreement.) Tj T*
+() Tj T*
+(2. CONTRACT VALUE) Tj T*
+(   The total contract value shall not exceed GBP 50,000.) Tj T*
+() Tj T*
+(3. GOVERNING LAW) Tj T*
+(   This Agreement shall be governed by the laws of England and Wales.) Tj T*
+(   The parties hereby agree to submit to the jurisdiction of the) Tj T*
+(   courts of England and Wales.) Tj T*
+() Tj T*
+(4. CONFIDENTIALITY) Tj T*
+(   Each party shall maintain confidentiality of the other party's) Tj T*
+(   proprietary information and intellectual property.) Tj T*
+() Tj T*
+(IN WITNESS WHEREOF, the parties have executed this Agreement.) Tj T*
+() Tj T*
+(Signed: ____________________    Date: ___________) Tj T*
+(        Party A Representative) Tj T*
+() Tj T*
+(Signed: ____________________    Date: ___________) Tj T*
+(        Party B Representative) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<</Type /Font /Subtype /Type1 /BaseFont /Helvetica>>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000056 00000 n 
+0000000111 00000 n 
+0000000231 00000 n 
+0000001990 00000 n 
+trailer
+<</Size 6 /Root 1 0 R>>
+startxref
+2058
+%%EOF

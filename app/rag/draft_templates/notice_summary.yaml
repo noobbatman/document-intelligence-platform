@@ -1,0 +1,17 @@
+{
+  "draft_type": "notice_summary",
+  "applicable_document_types": ["legal_notice"],
+  "document_type_overrides": {
+    "legal_notice": {
+      "support_terms": ["notice", "cease and desist", "demand", "summons", "subpoena", "response deadline", "required actions", "non-compliance"],
+      "instructions": ["Prioritize notice type, sender, recipient, deadline, required actions, legal basis, and consequences."]
+    }
+  },
+  "sections": [
+    {"key": "notice_overview", "title": "Notice Overview", "required": true, "query": "notice type issuing party receiving party issue date", "instruction": "Identify the notice type, issuing party, receiving party, and issue date."},
+    {"key": "legal_basis", "title": "Legal Basis", "required": false, "query": "legal basis statute violation subpoena summons demand authority", "instruction": "Summarize cited legal authority or alleged violation."},
+    {"key": "required_actions", "title": "Required Actions", "required": true, "query": "required actions must shall cease demand produce respond", "instruction": "List exactly what the recipient must do."},
+    {"key": "deadlines", "title": "Deadlines", "required": false, "query": "response deadline due date comply within days", "instruction": "Identify deadlines and response windows."},
+    {"key": "consequences", "title": "Consequences of Non-Compliance", "required": false, "query": "non-compliance consequences penalties action lawsuit default sanctions", "instruction": "Summarize stated consequences of non-compliance."}
+  ]
+}
