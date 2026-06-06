@@ -1,0 +1,16 @@
+{
+  "findings": [],
+  "gemini_ran": false,
+  "model": "gemma-4-31b-it",
+  "pr_number": 10,
+  "pr_url": "https://github.com/noobbatman/document-intelligence-platform/pull/10",
+  "schema_version": 1,
+  "score": 100,
+  "sha": "6d3d3c03e8f1ecdb8cbe3f541592da20ee7641b7",
+  "status": "no_relevant_files",
+  "timestamp": "2026-06-06T19:47:39.873954Z",
+  "total_critical": 0,
+  "total_warn": 0,
+  "truncated": false,
+  "validation_errors": []
+}
