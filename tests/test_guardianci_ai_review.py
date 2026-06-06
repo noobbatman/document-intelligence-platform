@@ -374,6 +374,37 @@ def test_review_body_mentions_critical_findings_and_validation_errors() -> None:
     assert "bad shape" in body
 
 
+def test_write_review_result_serializes_metrics_payload(tmp_path: Path) -> None:
+    result_path = tmp_path / "review.json"
+    finding = review.Finding(
+        file="app/api.py",
+        line_start=42,
+        line_end=42,
+        severity="CRITICAL",
+        issue="SQL injection.",
+        suggested_fix="Use bind parameters.",
+        frameworks=("PCI-DSS 6.2.4",),
+        remediation_urgency="before-merge",
+    )
+
+    review.write_review_result(
+        str(result_path),
+        {"pr_number": 7, "pr_url": "https://github.test/pr/7", "head_sha": "abc123"},
+        [finding],
+        ["ignored bad finding"],
+        truncated=True,
+        gemini_ran=True,
+        status="completed",
+    )
+
+    payload = review.json.loads(result_path.read_text(encoding="utf-8"))
+    assert payload["pr_number"] == 7
+    assert payload["sha"] == "abc123"
+    assert payload["total_critical"] == 1
+    assert payload["score"] == 80
+    assert payload["findings"][0]["frameworks"] == ["PCI-DSS 6.2.4"]
+
+
 def test_no_finding_body_is_non_blocking() -> None:
     body = review.render_review_body([], [], truncated=False)
 

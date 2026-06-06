@@ -10,12 +10,14 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import requests
 
 DEFAULT_MODEL = "gemma-4-31b-it"
+DEFAULT_REVIEW_RESULT_PATH = "guardianci-review-result.json"
 MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 MAX_AUTOFIX_FINDINGS = 3
@@ -97,6 +99,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run GuardianCI Gemini security review.")
     parser.add_argument("--base-ref", default=os.getenv("GITHUB_BASE_REF", "main"))
     parser.add_argument("--model", default=os.getenv("GEMINI_MODEL", DEFAULT_MODEL))
+    parser.add_argument(
+        "--review-result-path",
+        default=os.getenv("GUARDIANCI_REVIEW_RESULT_PATH", DEFAULT_REVIEW_RESULT_PATH),
+        help="Path where GuardianCI writes the structured review result for metrics.",
+    )
     parser.add_argument("--max-diff-chars", type=int, default=MAX_DIFF_CHARS)
     parser.add_argument(
         "--gemini-enabled",
@@ -135,6 +142,15 @@ def main() -> int:
         local_findings = local_security_findings(relevant_patches)
 
         if not review_diff.strip():
+            write_review_result(
+                args.review_result_path,
+                context,
+                [],
+                [],
+                truncated=False,
+                gemini_ran=False,
+                status="no_relevant_files",
+            )
             if not args.auto_fix_only:
                 post_review(
                     context,
@@ -156,6 +172,15 @@ def main() -> int:
             findings = merge_findings(local_findings, findings)
             gemini_ran = True
     except json.JSONDecodeError as exc:
+        write_review_result(
+            args.review_result_path,
+            context,
+            [],
+            [str(exc)],
+            truncated=False,
+            gemini_ran=True,
+            status="parse_error",
+        )
         if args.auto_fix_only:
             print(f"GuardianCI auto-fix could not parse Gemini review JSON: {exc}")
             return 0
@@ -171,6 +196,15 @@ def main() -> int:
         return 0
     except Exception as exc:
         if is_quota_or_rate_limit_error(exc):
+            write_review_result(
+                args.review_result_path,
+                context,
+                [],
+                [str(exc)],
+                truncated=False,
+                gemini_ran=True,
+                status="quota_or_rate_limited",
+            )
             if args.auto_fix_only:
                 print(f"GuardianCI auto-fix skipped due to quota/rate limit: {exc}")
                 return 0
@@ -187,6 +221,15 @@ def main() -> int:
             )
             print(f"GuardianCI skipped Gemini review due to quota/rate limit: {exc}")
             return 0
+        write_review_result(
+            args.review_result_path,
+            context,
+            [],
+            [str(exc)],
+            truncated=False,
+            gemini_ran=False,
+            status="failed",
+        )
         post_review(
             context,
             body=f"GuardianCI Gemini review failed before completion: `{exc}`",
@@ -196,6 +239,15 @@ def main() -> int:
         return 1
 
     critical_findings = [finding for finding in findings if finding.is_critical]
+    write_review_result(
+        args.review_result_path,
+        context,
+        findings,
+        validation_errors,
+        truncated=truncated,
+        gemini_ran=gemini_ran,
+        status="completed",
+    )
     if args.auto_fix_only:
         if not critical_findings:
             print("GuardianCI auto-fix found no CRITICAL findings to fix.")
@@ -789,6 +841,56 @@ def validate_findings(
         )
 
     return valid, errors
+
+
+def finding_to_dict(finding: Finding) -> dict[str, Any]:
+    return {
+        "file": finding.file,
+        "line_start": finding.line_start,
+        "line_end": finding.line_end,
+        "severity": finding.severity,
+        "issue": finding.issue,
+        "suggested_fix": finding.suggested_fix,
+        "frameworks": list(finding.frameworks),
+        "remediation_urgency": finding.remediation_urgency,
+    }
+
+
+def security_score(findings: list[Finding]) -> int:
+    critical = sum(1 for finding in findings if finding.severity == "CRITICAL")
+    warn = sum(1 for finding in findings if finding.severity == "WARN")
+    return max(0, 100 - (critical * 20) - (warn * 5))
+
+
+def write_review_result(
+    path: str,
+    context: dict[str, Any],
+    findings: list[Finding],
+    validation_errors: list[str],
+    *,
+    truncated: bool,
+    gemini_ran: bool,
+    status: str,
+) -> None:
+    critical = sum(1 for finding in findings if finding.severity == "CRITICAL")
+    warn = sum(1 for finding in findings if finding.severity == "WARN")
+    payload = {
+        "schema_version": 1,
+        "pr_number": context.get("pr_number"),
+        "pr_url": context.get("pr_url"),
+        "sha": context.get("head_sha") or os.getenv("GITHUB_SHA", ""),
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "status": status,
+        "model": os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
+        "gemini_ran": gemini_ran,
+        "truncated": truncated,
+        "findings": [finding_to_dict(finding) for finding in findings],
+        "validation_errors": validation_errors,
+        "total_critical": critical,
+        "total_warn": warn,
+        "score": security_score(findings),
+    }
+    Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def normalize_frameworks(value: Any) -> tuple[str, ...]:
