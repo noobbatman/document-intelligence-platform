@@ -61,6 +61,13 @@ def test_render_badge_uses_score_color() -> None:
     assert "GuardianCI-68%2F100-red" in badge
 
 
+def test_render_badge_color_thresholds() -> None:
+    assert "brightgreen" in metrics.render_badge({"rolling_30_day_score": 90})
+    assert "yellow" in metrics.render_badge({"rolling_30_day_score": 89})
+    assert "yellow" in metrics.render_badge({"rolling_30_day_score": 70})
+    assert "red" in metrics.render_badge({"rolling_30_day_score": 69})
+
+
 def test_render_dashboard_contains_summary_values() -> None:
     html = metrics.render_dashboard(
         {
