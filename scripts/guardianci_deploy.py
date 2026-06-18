@@ -135,9 +135,13 @@ def attempt_rollback(
     return f"GuardianCI rollback triggered for previous image {previous_image}."
 
 
-def wait_for_health(url: str, *, timeout_seconds: int, interval: int, startup_delay: int = 30) -> None:
+def wait_for_health(
+    url: str, *, timeout_seconds: int, interval: int, startup_delay: int = 30
+) -> None:
     if startup_delay > 0:
-        print(f"GuardianCI deploy: waiting {startup_delay}s for service to boot before health checks.")
+        print(
+            f"GuardianCI deploy: waiting {startup_delay}s for service to boot before health checks."
+        )
         time.sleep(startup_delay)
     deadline = time.monotonic() + timeout_seconds
     last_error = ""
