@@ -7,10 +7,6 @@ on:
   push:
     branches:
       - main
-  pull_request_review_comment:
-    types: [created]
-  issue_comment:
-    types: [created]
 
 # Default: deny everything. Each job below declares only what it needs.
 permissions: {}
@@ -335,32 +331,3 @@ jobs:
           --review-result deploy-artifacts/review/guardianci-review-result.json
           --health-timeout 600
           --health-interval 15
-
-  false-positive:
-    name: Record false-positive feedback
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: |
-      (github.event_name == 'pull_request_review_comment' ||
-       github.event_name == 'issue_comment') &&
-      contains(github.event.comment.body, '/fp')
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Record false-positive exclusion
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python scripts/guardianci_false_positive.py
