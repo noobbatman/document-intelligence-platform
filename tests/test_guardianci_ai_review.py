@@ -764,3 +764,86 @@ def test_post_review_logs_and_retries_body_only_on_inline_comment_rejection(
     assert "GitHub rejected 1 inline comment(s)" in output
     assert "comments" in calls[0]["json"]
     assert "comments" not in calls[1]["json"]
+
+
+def _make_finding(
+    file: str = "app/api.py",
+    line: int = 10,
+    issue: str = "TLS certificate verification is disabled.",
+) -> "review.Finding":
+    return review.Finding(
+        file=file,
+        line_start=line,
+        line_end=line,
+        severity="WARN",
+        issue=issue,
+        suggested_fix="Remove verify=False.",
+    )
+
+
+def test_finding_matches_exclusion_returns_false_when_no_exclusions() -> None:
+    assert review.finding_matches_exclusion(_make_finding(), [], "abc123") is False
+
+
+def test_finding_matches_exclusion_requires_all_three_conditions() -> None:
+    finding = _make_finding(file="app/api.py", issue="TLS certificate verification is disabled.")
+    exclusion = review.FalsePositiveExclusion(
+        file_pattern="app/api.py",
+        issue_type="TLS certificate verification is disabled.",
+        code_context_hash="abc123",
+    )
+
+    assert review.finding_matches_exclusion(finding, [exclusion], "abc123") is True
+    assert review.finding_matches_exclusion(finding, [exclusion], "wrong-hash") is False
+    assert review.finding_matches_exclusion(
+        _make_finding(file="app/other.py"), [exclusion], "abc123"
+    ) is False
+    assert review.finding_matches_exclusion(
+        _make_finding(issue="Different issue."), [exclusion], "abc123"
+    ) is False
+
+
+def test_finding_matches_exclusion_uses_fnmatch_glob_for_file() -> None:
+    finding = _make_finding(file="app/api/routes.py")
+    wildcard = review.FalsePositiveExclusion(
+        file_pattern="app/**/*.py",
+        issue_type="TLS certificate verification",
+        code_context_hash="",
+    )
+    exact = review.FalsePositiveExclusion(
+        file_pattern="app/api/routes.py",
+        issue_type="TLS certificate verification",
+        code_context_hash="",
+    )
+    no_match = review.FalsePositiveExclusion(
+        file_pattern="scripts/*.py",
+        issue_type="TLS certificate verification",
+        code_context_hash="",
+    )
+
+    assert review.finding_matches_exclusion(finding, [wildcard], "") is True
+    assert review.finding_matches_exclusion(finding, [exact], "") is True
+    assert review.finding_matches_exclusion(finding, [no_match], "") is False
+
+
+def test_finding_matches_exclusion_issue_type_is_case_insensitive_substring() -> None:
+    finding = _make_finding(issue="TLS certificate verification is disabled.")
+    exclusion = review.FalsePositiveExclusion(
+        file_pattern="app/api.py",
+        issue_type="TLS CERTIFICATE",
+        code_context_hash="",
+    )
+
+    assert review.finding_matches_exclusion(finding, [exclusion], "") is True
+
+
+def test_finding_matches_exclusion_empty_exclusion_hash_skips_hash_check() -> None:
+    finding = _make_finding()
+    exclusion = review.FalsePositiveExclusion(
+        file_pattern="app/api.py",
+        issue_type="TLS certificate verification",
+        code_context_hash="",
+    )
+
+    assert review.finding_matches_exclusion(finding, [exclusion], "any-hash") is True
+    assert review.finding_matches_exclusion(finding, [exclusion], "") is True

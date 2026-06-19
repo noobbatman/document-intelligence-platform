@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""GuardianCI deployment helper for GHCR -> Railway releases."""
+"""GuardianCI deployment helper for GHCR -> Render releases."""
 
 from __future__ import annotations
 
@@ -33,11 +33,11 @@ def main() -> int:
     parser.add_argument("--health-startup-delay", type=int, default=30)
     args = parser.parse_args()
 
-    webhook_url = os.getenv("RAILWAY_WEBHOOK_URL", "")
-    rollback_webhook_url = os.getenv("RAILWAY_ROLLBACK_WEBHOOK_URL", "")
+    webhook_url = os.getenv("RENDER_DEPLOY_HOOK_URL", "")
+    rollback_webhook_url = os.getenv("RENDER_ROLLBACK_HOOK_URL", "")
     slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL", "")
     if not webhook_url:
-        raise RuntimeError("RAILWAY_WEBHOOK_URL is required for Phase 7 deploys.")
+        raise RuntimeError("RENDER_DEPLOY_HOOK_URL is required for Phase 7 deploys.")
     if not args.image:
         raise RuntimeError("DEPLOY_IMAGE or --image is required for Phase 7 deploys.")
 
@@ -117,7 +117,7 @@ def attempt_rollback(
 ) -> str:
     previous_image = str(previous.get("image") or "")
     if not rollback_webhook_url:
-        return "GuardianCI rollback skipped: RAILWAY_ROLLBACK_WEBHOOK_URL is not configured."
+        return "GuardianCI rollback skipped: RENDER_ROLLBACK_HOOK_URL is not configured."
     if not previous_image:
         return "GuardianCI rollback skipped: no previous image tag was recorded."
 
