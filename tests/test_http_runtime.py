@@ -48,9 +48,6 @@ def _all_get_samples(metric) -> list[str]:
 
 
 def test_http_metrics_recorded_for_requests(client) -> None:
-    # normalized_path() returns scope["route"].path.  FastAPI/Starlette resolves
-    # the matched route after include_router() applies the "/api/v1" prefix, so
-    # the label is the full template "/api/v1/health", not the inner "/health".
     counter_labels = {"method": "GET", "path": "/api/v1/health", "status": "200"}
     histogram_labels = {"method": "GET", "path": "/api/v1/health"}
 

@@ -183,6 +183,31 @@ def rate_limit_key(request: Request, settings: Settings) -> str:
 
 
 def normalized_path(request: Request) -> str:
-    route = request.scope.get("route")
-    path = getattr(route, "path", None)
-    return str(path or request.url.path)
+    scope = request.scope
+    route = scope.get("route")
+    if route is None:
+        return request.url.path
+
+    template: str | None = getattr(route, "path", None)
+    if not template:
+        return request.url.path
+
+    url_path: str = request.url.path
+    path_params: dict[str, str] = scope.get("path_params", {})
+
+    try:
+        concrete = template.format_map(path_params)
+    except (KeyError, ValueError):
+        return template
+
+    if concrete == url_path:
+        return template
+
+    # Older Starlette stores route.path without the mount prefix applied by
+    # include_router(). Recover the full template by prepending the missing
+    # prefix, derived by stripping the filled suffix from the actual URL.
+    if url_path.endswith(concrete):
+        prefix = url_path[: len(url_path) - len(concrete)]
+        return prefix + template
+
+    return template
