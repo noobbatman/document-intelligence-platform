@@ -93,22 +93,28 @@ def test_notify_slack_is_non_blocking(monkeypatch) -> None:
 
 
 def test_wait_for_health_startup_delay_is_skipped_when_zero(monkeypatch) -> None:
-    calls = []
+    # Use URLError so wait_for_health's except clause catches it and the retry
+    # loop runs normally (RuntimeError bypasses the handler, giving false coverage).
+    # Track all events in order: the very first event must be "urlopen", proving
+    # no startup-delay sleep happened before the first poll attempt.
+    events: list[str] = []
 
     def fake_urlopen(request, timeout=None):
-        calls.append(request)
-        raise RuntimeError("stop after first call")
+        events.append("urlopen")
+        raise deploy.urllib.error.URLError("connection refused")
 
     monkeypatch.setattr(deploy.urllib.request, "urlopen", fake_urlopen)
-    slept = []
-    monkeypatch.setattr(deploy.time, "sleep", slept.append)
+    monkeypatch.setattr(deploy.time, "sleep", lambda _s: events.append("sleep"))
 
     try:
         deploy.wait_for_health("http://example.com", timeout_seconds=1, interval=1, startup_delay=0)
     except RuntimeError:
         pass
 
-    assert slept == [], "startup_delay=0 must not call time.sleep before polling"
+    assert events, "no events recorded — urlopen was never called"
+    assert events[0] == "urlopen", (
+        f"startup_delay=0 must not sleep before first poll; events: {events}"
+    )
 
 
 def test_parse_coverage_returns_none_for_missing_file(tmp_path: Path) -> None:
