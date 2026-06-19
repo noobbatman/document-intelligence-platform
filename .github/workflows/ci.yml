@@ -1,4 +1,4 @@
-name: GuardianCI Phase 1
+name: CI
 
 on:
   pull_request:
@@ -168,8 +168,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
 
-      - name: Install AI review dependencies
-        run: uv pip install --system google-genai requests
+      - name: Install dependencies
+        run: uv pip install --system -r requirements/base.lock
 
       - name: Install gitleaks
         run: |
@@ -194,19 +194,32 @@ jobs:
           data = json.load(open('gitleaks-report.json'))
           print(len(data) if isinstance(data, list) else 0)
           " 2>/dev/null || echo "some")
-            echo "::warning::Gitleaks found ${COUNT} potential secret(s) in this PR — Gemini review will also report these as CRITICAL findings"
-            cat gitleaks-report.json
+            if [ "$GUARDIANCI_AI_ENABLED" = "false" ]; then
+              echo "ERROR: Gitleaks found ${COUNT} secret(s). AI review is disabled — gitleaks is the only enforcement layer. Fix secrets before merging." >&2
+              cat gitleaks-report.json
+              exit 1
+            else
+              echo "::warning::Gitleaks found ${COUNT} potential secret(s) — AI review will also flag these as CRITICAL."
+              cat gitleaks-report.json
+            fi
           fi
+        env:
+          GUARDIANCI_AI_ENABLED: ${{ vars.GUARDIANCI_AI_ENABLED || vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
 
-      - name: Run Gemini security review
+      - name: Run GuardianCI AI security review
         id: ai-review
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
-          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
+          # New provider-agnostic env vars (v0.1.0+)
+          GUARDIANCI_LLM_PROVIDER: ${{ vars.GUARDIANCI_LLM_PROVIDER || 'gemini' }}
+          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GUARDIANCI_LLM_API_KEY: ${{ secrets.GUARDIANCI_LLM_API_KEY || secrets.GEMINI_API_KEY }}
+          GUARDIANCI_LLM_BASE_URL: ${{ vars.GUARDIANCI_LLM_BASE_URL }}
+          GUARDIANCI_AI_ENABLED: ${{ vars.GUARDIANCI_AI_ENABLED || vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
           GUARDIANCI_AUTOFIX_ENABLED: "false"
           GUARDIANCI_REVIEW_RESULT_PATH: guardianci-review-result.json
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Legacy fallbacks — keep until repo secrets are migrated
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/guardianci_ai_review.py --review-only
 
       - name: Upload GuardianCI review result
@@ -247,6 +260,9 @@ jobs:
 
       - name: Publish GuardianCI metrics
         # guardianci_metrics.py uses only the standard library; no dependency install needed.
+        env:
+          GUARDIANCI_METRICS_WEBHOOK_URL: ${{ secrets.GUARDIANCI_METRICS_WEBHOOK_URL }}
+          GUARDIANCI_METRICS_WEBHOOK_SECRET: ${{ secrets.GUARDIANCI_METRICS_WEBHOOK_SECRET }}
         run: python scripts/guardianci_metrics.py --result guardianci-review-result.json
 
   auto-fix:
@@ -278,16 +294,19 @@ jobs:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
 
-      - name: Install AI review dependencies
-        run: uv pip install --system google-genai requests
+      - name: Install dependencies
+        run: uv pip install --system -r requirements/base.lock
 
       - name: Prepare GuardianCI auto-fix draft PR
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
-          GUARDIANCI_GEMINI_ENABLED: ${{ vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
+          GUARDIANCI_LLM_PROVIDER: ${{ vars.GUARDIANCI_LLM_PROVIDER || 'gemini' }}
+          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GUARDIANCI_LLM_API_KEY: ${{ secrets.GUARDIANCI_LLM_API_KEY || secrets.GEMINI_API_KEY }}
+          GUARDIANCI_LLM_BASE_URL: ${{ vars.GUARDIANCI_LLM_BASE_URL }}
+          GUARDIANCI_AI_ENABLED: ${{ vars.GUARDIANCI_AI_ENABLED || vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
           GUARDIANCI_AUTOFIX_ENABLED: ${{ vars.GUARDIANCI_AUTOFIX_ENABLED || 'true' }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python scripts/guardianci_ai_review.py --auto-fix-only
 
   deploy:

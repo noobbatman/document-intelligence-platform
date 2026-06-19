@@ -1,12 +1,18 @@
 #!/usr/bin/env python
-"""Publish GuardianCI review metrics to the guardianci-metrics branch."""
+"""Publish GuardianCI review metrics: git-branch storage + optional webhook push."""
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import html
 import json
+import os
 import subprocess
+import time
+import urllib.error
+import urllib.request
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -18,11 +24,25 @@ SUMMARY_FILE = "summary.json"
 BADGE_FILE = "SECURITY_BADGE.md"
 DASHBOARD_FILE = "index.html"
 
+# Webhook env vars — set these to push metrics to any external system.
+WEBHOOK_URL_ENV = "GUARDIANCI_METRICS_WEBHOOK_URL"
+WEBHOOK_SECRET_ENV = "GUARDIANCI_METRICS_WEBHOOK_SECRET"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish GuardianCI metrics.")
     parser.add_argument("--result", default="guardianci-review-result.json")
     parser.add_argument("--branch", default=METRICS_BRANCH)
+    parser.add_argument(
+        "--webhook-url",
+        default=os.getenv(WEBHOOK_URL_ENV, ""),
+        help="POST the review result + summary to this URL after every review.",
+    )
+    parser.add_argument(
+        "--webhook-secret",
+        default=os.getenv(WEBHOOK_SECRET_ENV, ""),
+        help="If set, sign webhook payloads with HMAC-SHA256.",
+    )
     args = parser.parse_args()
 
     result_path = Path(args.result)
@@ -31,6 +51,8 @@ def main() -> int:
         return 0
 
     result = json.loads(result_path.read_text(encoding="utf-8"))
+
+    # ── Git-branch storage (default, backward-compatible) ──────────────────
     ensure_git_identity()
     ensure_metrics_branch(args.branch)
     review_path = write_review_record(result)
@@ -43,12 +65,91 @@ def main() -> int:
     run_git(["add", REVIEWS_DIR, SUMMARY_FILE, BADGE_FILE, DASHBOARD_FILE])
     if not has_git_changes():
         print("GuardianCI metrics branch already up to date.")
-        return 0
+    else:
+        run_git(["commit", "-m", f"GuardianCI metrics: {review_path.name}"])
+        run_git(["push", "origin", f"HEAD:{args.branch}"])
+        print(f"GuardianCI metrics published to {args.branch}.")
 
-    run_git(["commit", "-m", f"GuardianCI metrics: {review_path.name}"])
-    run_git(["push", "origin", f"HEAD:{args.branch}"])
-    print(f"GuardianCI metrics published to {args.branch}.")
+    # ── Webhook push (opt-in, non-fatal) ───────────────────────────────────
+    if args.webhook_url:
+        push_webhook(
+            result,
+            summary,
+            url=args.webhook_url,
+            secret=args.webhook_secret or None,
+        )
+
     return 0
+
+
+def push_webhook(
+    result: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    url: str,
+    secret: str | None = None,
+    timeout: int = 15,
+    retries: int = 3,
+) -> None:
+    """POST the review result + rolling summary to a webhook endpoint.
+
+    The payload shape is stable across GuardianCI versions:
+        {
+            "event":          "guardianci.review.completed",
+            "schema_version": 1,
+            "review":         { ...review result... },
+            "summary":        { ...rolling 30-day summary... }
+        }
+
+    If *secret* is supplied the request includes an
+    ``X-GuardianCI-Signature-256: sha256=<hex>`` header so receivers can
+    verify authenticity with a constant-time HMAC comparison.
+
+    Webhook failures are logged but never fail the CI job.
+    """
+    payload: dict[str, Any] = {
+        "event": "guardianci.review.completed",
+        "schema_version": 1,
+        "review": result,
+        "summary": summary,
+    }
+    body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "User-Agent": "GuardianCI/1.0",
+    }
+    if secret:
+        sig = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+        headers["X-GuardianCI-Signature-256"] = f"sha256={sig}"
+
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                print(f"GuardianCI metrics webhook delivered: HTTP {resp.status} → {url}")
+                return
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500:
+                print(
+                    f"GuardianCI metrics webhook returned HTTP {exc.code} — "
+                    "not retrying (client error)."
+                )
+                return
+            print(
+                f"GuardianCI metrics webhook attempt {attempt + 1}/{retries}: "
+                f"HTTP {exc.code} (server error)"
+            )
+        except Exception as exc:
+            print(f"GuardianCI metrics webhook attempt {attempt + 1}/{retries}: {exc}")
+
+        if attempt < retries - 1:
+            time.sleep(2**attempt)
+
+    print(
+        f"GuardianCI metrics webhook failed after {retries} attempt(s) — "
+        "continuing without delivery."
+    )
 
 
 def ensure_git_identity() -> None:

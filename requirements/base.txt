@@ -1,0 +1,9 @@
+# GuardianCI runtime — direct dependency constraints (source of truth for pyproject.toml).
+#
+# CI installs from base.lock (hash-pinned transitive deps), not this file.
+# This file is the human-readable spec; base.lock is what CI actually installs.
+#
+# Regenerate the lockfile after changing this:
+#   uv pip compile pyproject.toml --extra gemini -o requirements/base.lock --generate-hashes --no-header
+requests>=2.32.0,<3
+google-genai>=1.0.0,<3
