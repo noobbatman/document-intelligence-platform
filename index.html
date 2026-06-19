@@ -16,19 +16,19 @@
 </head>
 <body>
   <h1>GuardianCI Security Dashboard</h1>
-  <p>Generated at 2026-06-19T12:44:56.481994Z</p>
-  <div class="score">83.85/100</div>
+  <p>Generated at 2026-06-19T13:42:59.004608Z</p>
+  <div class="score">80.74/100</div>
   <div class="grid">
     <section>
       <h2>Findings</h2>
-      <p>Total PRs reviewed: 26</p>
-      <p>Total findings: 45</p>
+      <p>Total PRs reviewed: 27</p>
+      <p>Total findings: 57</p>
     </section>
     <section>
       <h2>Severity</h2>
       <pre>{
-  &quot;CRITICAL&quot;: 33,
-  &quot;WARN&quot;: 12
+  &quot;CRITICAL&quot;: 42,
+  &quot;WARN&quot;: 15
 }</pre>
     </section>
   </div>
@@ -36,6 +36,7 @@
     <h2>Top Vulnerable Modules</h2>
     <table><tbody>
       <tr><td>scripts/demo_vulnerable_patterns.py</td><td>44</td></tr>
+<tr><td>scripts/demo_vulnerabilities.py</td><td>12</td></tr>
 <tr><td>.github/workflows/guardianci-false-positive.yml</td><td>1</td></tr>
     </tbody></table>
   </section>
@@ -43,18 +44,22 @@
     <h2>Recent Reviews</h2>
     <pre id="data">{
   &quot;schema_version&quot;: 1,
-  &quot;generated_at&quot;: &quot;2026-06-19T12:44:56.481994Z&quot;,
-  &quot;rolling_30_day_score&quot;: 83.85,
-  &quot;total_prs_reviewed&quot;: 26,
-  &quot;total_findings&quot;: 45,
+  &quot;generated_at&quot;: &quot;2026-06-19T13:42:59.004608Z&quot;,
+  &quot;rolling_30_day_score&quot;: 80.74,
+  &quot;total_prs_reviewed&quot;: 27,
+  &quot;total_findings&quot;: 57,
   &quot;severity_breakdown&quot;: {
-    &quot;CRITICAL&quot;: 33,
-    &quot;WARN&quot;: 12
+    &quot;CRITICAL&quot;: 42,
+    &quot;WARN&quot;: 15
   },
   &quot;top_vulnerable_modules&quot;: [
     {
       &quot;file&quot;: &quot;scripts/demo_vulnerable_patterns.py&quot;,
       &quot;findings&quot;: 44
+    },
+    {
+      &quot;file&quot;: &quot;scripts/demo_vulnerabilities.py&quot;,
+      &quot;findings&quot;: 12
     },
     {
       &quot;file&quot;: &quot;.github/workflows/guardianci-false-positive.yml&quot;,
@@ -64,23 +69,31 @@
   &quot;top_frameworks&quot;: [
     {
       &quot;framework&quot;: &quot;GDPR Art. 32&quot;,
-      &quot;findings&quot;: 44
+      &quot;findings&quot;: 52
     },
     {
       &quot;framework&quot;: &quot;SOC 2 CC6.1&quot;,
-      &quot;findings&quot;: 33
+      &quot;findings&quot;: 40
     },
     {
       &quot;framework&quot;: &quot;SOC 2 CC6.7&quot;,
+      &quot;findings&quot;: 13
+    },
+    {
+      &quot;framework&quot;: &quot;PCI-DSS 6.2.4&quot;,
       &quot;findings&quot;: 12
     },
     {
       &quot;framework&quot;: &quot;PCI-DSS 6.4.3&quot;,
-      &quot;findings&quot;: 8
+      &quot;findings&quot;: 11
     },
     {
-      &quot;framework&quot;: &quot;PCI-DSS 6.2.4&quot;,
-      &quot;findings&quot;: 8
+      &quot;framework&quot;: &quot;SOC 2 CC7.2&quot;,
+      &quot;findings&quot;: 2
+    },
+    {
+      &quot;framework&quot;: &quot;SOC 2 CC7.1&quot;,
+      &quot;findings&quot;: 2
     },
     {
       &quot;framework&quot;: &quot;PCI-DSS 7.2.1&quot;,
@@ -295,6 +308,14 @@
       &quot;total_critical&quot;: 0,
       &quot;total_warn&quot;: 0,
       &quot;timestamp&quot;: &quot;2026-06-19T12:44:44.247547Z&quot;
+    },
+    {
+      &quot;pr_number&quot;: 19,
+      &quot;sha&quot;: &quot;4e6ddcf499360deeb7f8d1e9d91aa9ba0afa0832&quot;,
+      &quot;score&quot;: 0,
+      &quot;total_critical&quot;: 9,
+      &quot;total_warn&quot;: 3,
+      &quot;timestamp&quot;: &quot;2026-06-19T13:42:48.133097Z&quot;
     }
   ]
 }</pre>

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-19T12:44:56.481994Z",
+  "generated_at": "2026-06-19T13:42:59.004608Z",
   "recent_reviews": [
     {
       "pr_number": 8,
@@ -208,34 +208,50 @@
       "timestamp": "2026-06-19T12:44:44.247547Z",
       "total_critical": 0,
       "total_warn": 0
+    },
+    {
+      "pr_number": 19,
+      "score": 0,
+      "sha": "4e6ddcf499360deeb7f8d1e9d91aa9ba0afa0832",
+      "timestamp": "2026-06-19T13:42:48.133097Z",
+      "total_critical": 9,
+      "total_warn": 3
     }
   ],
-  "rolling_30_day_score": 83.85,
+  "rolling_30_day_score": 80.74,
   "schema_version": 1,
   "severity_breakdown": {
-    "CRITICAL": 33,
-    "WARN": 12
+    "CRITICAL": 42,
+    "WARN": 15
   },
   "top_frameworks": [
     {
-      "findings": 44,
+      "findings": 52,
       "framework": "GDPR Art. 32"
     },
     {
-      "findings": 33,
+      "findings": 40,
       "framework": "SOC 2 CC6.1"
     },
     {
-      "findings": 12,
+      "findings": 13,
       "framework": "SOC 2 CC6.7"
     },
     {
-      "findings": 8,
+      "findings": 12,
+      "framework": "PCI-DSS 6.2.4"
+    },
+    {
+      "findings": 11,
       "framework": "PCI-DSS 6.4.3"
     },
     {
-      "findings": 8,
-      "framework": "PCI-DSS 6.2.4"
+      "findings": 2,
+      "framework": "SOC 2 CC7.2"
+    },
+    {
+      "findings": 2,
+      "framework": "SOC 2 CC7.1"
     },
     {
       "findings": 1,
@@ -248,10 +264,14 @@
       "findings": 44
     },
     {
+      "file": "scripts/demo_vulnerabilities.py",
+      "findings": 12
+    },
+    {
       "file": ".github/workflows/guardianci-false-positive.yml",
       "findings": 1
     }
   ],
-  "total_findings": 45,
-  "total_prs_reviewed": 26
+  "total_findings": 57,
+  "total_prs_reviewed": 27
 }
