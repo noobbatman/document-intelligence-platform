@@ -1,6 +1,6 @@
 {
   "coverage_percent": 81.99,
-  "image": "ghcr.io/noobbatman/document-intelligence-platform:57a34c92d9b8ba71454b143800283582adcea420",
+  "image": "ghcr.io/noobbatman/document-intelligence-platform:4adb64c0bbf93ba84c378e91351a741d9391afb8",
   "repo": "noobbatman/document-intelligence-platform",
   "schema_version": 1,
   "security": {
@@ -9,7 +9,7 @@
     "total_critical": 0,
     "total_warn": 0
   },
-  "sha": "57a34c92d9b8ba71454b143800283582adcea420",
-  "short_sha": "57a34c9",
-  "timestamp": "2026-06-19T07:38:14.114964Z"
+  "sha": "4adb64c0bbf93ba84c378e91351a741d9391afb8",
+  "short_sha": "4adb64c",
+  "timestamp": "2026-06-19T08:18:00.095231Z"
 }
