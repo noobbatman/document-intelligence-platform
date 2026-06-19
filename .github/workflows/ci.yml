@@ -211,7 +211,7 @@ jobs:
         env:
           # New provider-agnostic env vars (v0.1.0+)
           GUARDIANCI_LLM_PROVIDER: ${{ vars.GUARDIANCI_LLM_PROVIDER || 'gemini' }}
-          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
           GUARDIANCI_LLM_API_KEY: ${{ secrets.GUARDIANCI_LLM_API_KEY || secrets.GEMINI_API_KEY }}
           GUARDIANCI_LLM_BASE_URL: ${{ vars.GUARDIANCI_LLM_BASE_URL }}
           GUARDIANCI_AI_ENABLED: ${{ vars.GUARDIANCI_AI_ENABLED || vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
@@ -300,7 +300,7 @@ jobs:
       - name: Prepare GuardianCI auto-fix draft PR
         env:
           GUARDIANCI_LLM_PROVIDER: ${{ vars.GUARDIANCI_LLM_PROVIDER || 'gemini' }}
-          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemini-2.0-flash' }}
+          GUARDIANCI_LLM_MODEL: ${{ vars.GUARDIANCI_LLM_MODEL || vars.GEMINI_MODEL || 'gemma-4-31b-it' }}
           GUARDIANCI_LLM_API_KEY: ${{ secrets.GUARDIANCI_LLM_API_KEY || secrets.GEMINI_API_KEY }}
           GUARDIANCI_LLM_BASE_URL: ${{ vars.GUARDIANCI_LLM_BASE_URL }}
           GUARDIANCI_AI_ENABLED: ${{ vars.GUARDIANCI_AI_ENABLED || vars.GUARDIANCI_GEMINI_ENABLED || 'true' }}
