@@ -1,0 +1,170 @@
+{
+  "findings": [
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "PCI-DSS 6.4.3",
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "Possible hardcoded secret or API key added in this change.",
+      "line_end": 17,
+      "line_start": 17,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Move the value into a GitHub secret or environment variable."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "PCI-DSS 6.2.4",
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "String-built SQL with interpolation can allow SQL injection.",
+      "line_end": 32,
+      "line_start": 32,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Use SQLAlchemy bind parameters instead of interpolating user data."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "JWT code appears to allow or reference the `alg=none` bypass pattern.",
+      "line_end": 36,
+      "line_start": 36,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Require a fixed signing algorithm and reject unsigned tokens."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "JWT code appears to allow or reference the `alg=none` bypass pattern.",
+      "line_end": 46,
+      "line_start": 46,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Require a fixed signing algorithm and reject unsigned tokens."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "JWT code appears to allow or reference the `alg=none` bypass pattern.",
+      "line_end": 47,
+      "line_start": 47,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Require a fixed signing algorithm and reject unsigned tokens."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.7",
+        "GDPR Art. 32"
+      ],
+      "issue": "TLS certificate verification is disabled.",
+      "line_end": 60,
+      "line_start": 60,
+      "remediation_urgency": "within-sprint",
+      "severity": "WARN",
+      "suggested_fix": "Remove `verify=False` and trust a configured CA bundle if needed."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.7",
+        "GDPR Art. 32"
+      ],
+      "issue": "TLS certificate verification is disabled.",
+      "line_end": 61,
+      "line_start": 61,
+      "remediation_urgency": "within-sprint",
+      "severity": "WARN",
+      "suggested_fix": "Remove `verify=False` and trust a configured CA bundle if needed."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "PCI-DSS 6.4.3",
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "Hardcoded API key 'GEMINI_API_KEY' found in source code.",
+      "line_end": 18,
+      "line_start": 18,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Remove the hardcoded secret and load it from a secure environment variable or a secret management service (e.g., AWS Secrets Manager, HashiCorp Vault)."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "PCI-DSS 6.2.4",
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "SQL injection vulnerability via f-string interpolation of the 'document_id' parameter into a raw SQL query.",
+      "line_end": 31,
+      "line_start": 31,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Use parameterized queries or an ORM to safely handle user input. Example: db.execute(\"SELECT * FROM documents WHERE id = ?\", (document_id,))"
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.1",
+        "GDPR Art. 32"
+      ],
+      "issue": "JWT algorithm confusion vulnerability: the code explicitly allows 'alg=none', which permits attackers to bypass signature verification by providing an unsigned token.",
+      "line_end": 51,
+      "line_start": 44,
+      "remediation_urgency": "before-merge",
+      "severity": "CRITICAL",
+      "suggested_fix": "Remove support for 'alg=none'. Enforce a specific, secure signing algorithm (e.g., HS256 or RS256) and verify the signature before trusting the payload."
+    },
+    {
+      "file": "scripts/demo_vulnerable_patterns.py",
+      "frameworks": [
+        "SOC 2 CC6.7",
+        "GDPR Art. 32"
+      ],
+      "issue": "TLS certificate verification is disabled (verify=False), exposing the connection to Man-in-the-Middle (MITM) attacks.",
+      "line_end": 60,
+      "line_start": 60,
+      "remediation_urgency": "within-sprint",
+      "severity": "WARN",
+      "suggested_fix": "Set 'verify=True' to ensure the remote server's TLS certificate is validated against trusted CA certificates."
+    }
+  ],
+  "gemini_cost_usd": 0.0,
+  "gemini_input_tokens": 1268,
+  "gemini_output_tokens": 721,
+  "gemini_ran": true,
+  "large_diff": false,
+  "model": "gemma-4-31b-it",
+  "pr_number": 18,
+  "pr_url": "https://github.com/noobbatman/document-intelligence-platform/pull/18",
+  "schema_version": 1,
+  "score": 0,
+  "sha": "1d7b484e6468a5cb402b25c3a4da675a39cfc2c6",
+  "sha_deduplicated": false,
+  "skipped_file_count": 0,
+  "status": "completed",
+  "timestamp": "2026-06-19T08:44:17.103568Z",
+  "total_critical": 8,
+  "total_warn": 3,
+  "truncated": false,
+  "validation_errors": []
+}
