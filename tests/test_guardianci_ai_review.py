@@ -772,7 +772,7 @@ def _make_finding(
     file: str = "app/api.py",
     line: int = 10,
     issue: str = "TLS certificate verification is disabled.",
-) -> "review.Finding":
+) -> review.Finding:
     return review.Finding(
         file=file,
         line_start=line,
