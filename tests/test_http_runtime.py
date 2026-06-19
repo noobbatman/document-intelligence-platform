@@ -36,9 +36,25 @@ def test_default_rate_limit_enforced(client, monkeypatch) -> None:
     assert second.headers["Retry-After"]
 
 
+def _all_get_samples(metric) -> list[str]:
+    """Collect all GET-method samples for diagnostics in assertion messages."""
+    COUNTER_NAMES = {"docintel_http_requests_total", "docintel_http_requests_total_total"}
+    return [
+        f"{s.name} {s.labels} = {s.value}"
+        for family in metric.collect()
+        for s in family.samples
+        if s.name in COUNTER_NAMES and s.labels.get("method") == "GET"
+    ]
+
+
 def test_http_metrics_recorded_for_requests(client) -> None:
-    counter_labels = {"method": "GET", "path": "/api/v1/health", "status": "200"}
-    histogram_labels = {"method": "GET", "path": "/api/v1/health"}
+    # normalized_path() returns the matched route's path attribute.  In
+    # FastAPI/Starlette, the route object placed in request.scope["route"] by
+    # the router carries the path as registered on the *inner* APIRouter before
+    # the app-level prefix ("/api/v1") is applied, so the recorded label is
+    # "/health", not "/api/v1/health".
+    counter_labels = {"method": "GET", "path": "/health", "status": "200"}
+    histogram_labels = {"method": "GET", "path": "/health"}
 
     before_count = _sample_value(
         http_requests_total,
@@ -65,7 +81,10 @@ def test_http_metrics_recorded_for_requests(client) -> None:
     )
 
     assert response.status_code == 200
-    assert after_count == before_count + 1
+    assert after_count == before_count + 1, (
+        f"Counter for {counter_labels} did not increment. "
+        f"Recorded GET samples after request: {_all_get_samples(http_requests_total)}"
+    )
     assert after_hist_count == before_hist_count + 1
 
 
