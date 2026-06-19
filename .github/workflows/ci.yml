@@ -329,3 +329,5 @@ jobs:
           python scripts/guardianci_deploy.py
           --coverage deploy-artifacts/coverage/coverage.xml
           --review-result deploy-artifacts/review/guardianci-review-result.json
+          --health-timeout 600
+          --health-interval 15

@@ -92,6 +92,36 @@ def test_notify_slack_is_non_blocking(monkeypatch) -> None:
     deploy.notify_slack("https://slack.example/webhook", "hello")
 
 
+def test_wait_for_health_startup_delay_is_skipped_when_zero(monkeypatch) -> None:
+    # Use URLError so wait_for_health's except clause catches it normally
+    # (RuntimeError bypasses the handler, giving false coverage of the retry path).
+    # Record events as (type, value) tuples to verify both order and sleep duration.
+    events: list[tuple[str, object]] = []
+
+    def fake_urlopen(_url, timeout=None):
+        events.append(("urlopen", timeout))
+        raise deploy.urllib.error.URLError("connection refused")
+
+    def fake_sleep(seconds: float) -> None:
+        events.append(("sleep", seconds))
+        raise RuntimeError("stop after first sleep")
+
+    monkeypatch.setattr(deploy.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(deploy.time, "sleep", fake_sleep)
+
+    try:
+        deploy.wait_for_health(
+            "http://example.com", timeout_seconds=10, interval=1, startup_delay=0
+        )
+    except RuntimeError as exc:
+        assert "stop after first sleep" in str(exc)
+
+    assert [event[0] for event in events[:2]] == ["urlopen", "sleep"], (
+        f"startup_delay=0 must not sleep before the first poll; events: {events}"
+    )
+    assert events[1] == ("sleep", 1)
+
+
 def test_parse_coverage_returns_none_for_missing_file(tmp_path: Path) -> None:
     assert deploy.parse_coverage(tmp_path / "nonexistent.xml") is None
 
