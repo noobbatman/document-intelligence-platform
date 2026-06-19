@@ -797,12 +797,16 @@ def test_finding_matches_exclusion_requires_all_three_conditions() -> None:
 
     assert review.finding_matches_exclusion(finding, [exclusion], "abc123") is True
     assert review.finding_matches_exclusion(finding, [exclusion], "wrong-hash") is False
-    assert review.finding_matches_exclusion(
-        _make_finding(file="app/other.py"), [exclusion], "abc123"
-    ) is False
-    assert review.finding_matches_exclusion(
-        _make_finding(issue="Different issue."), [exclusion], "abc123"
-    ) is False
+    assert (
+        review.finding_matches_exclusion(_make_finding(file="app/other.py"), [exclusion], "abc123")
+        is False
+    )
+    assert (
+        review.finding_matches_exclusion(
+            _make_finding(issue="Different issue."), [exclusion], "abc123"
+        )
+        is False
+    )
 
 
 def test_finding_matches_exclusion_uses_fnmatch_glob_for_file() -> None:
@@ -870,11 +874,7 @@ def test_count_diff_lines_counts_only_added_lines() -> None:
 def test_count_diff_lines_excludes_header_and_context_lines() -> None:
     patch = (
         "app/api.py",
-        "@@ -1,3 +1,4 @@\n"
-        " context line\n"
-        "+added line\n"
-        "-removed line\n"
-        "+++ b/app/api.py\n",
+        "@@ -1,3 +1,4 @@\n context line\n+added line\n-removed line\n+++ b/app/api.py\n",
     )
     assert review.count_diff_lines([patch]) == 1
 

@@ -87,7 +87,9 @@ def test_render_audit_body_with_no_exclusions() -> None:
 
 
 def test_is_guardianci_finding_body_requires_both_markers() -> None:
-    assert fp.is_guardianci_finding_body("**GuardianCI CRITICAL**\n\nSuggested fix: use env.") is True
+    assert (
+        fp.is_guardianci_finding_body("**GuardianCI CRITICAL**\n\nSuggested fix: use env.") is True
+    )
     assert fp.is_guardianci_finding_body("**GuardianCI WARN**\n\nSuggested fix: ...") is True
     assert fp.is_guardianci_finding_body("**GuardianCI CRITICAL**\n\nNo fix marker here.") is False
     assert fp.is_guardianci_finding_body("Suggested fix: use env.") is False
