@@ -238,7 +238,11 @@ def append_exclusion_record(branch: str, record: dict[str, Any]) -> bool:
     if not has_git_changes([EXCLUSIONS_FILE]):
         return False
     run_git(
-        ["commit", "-m", f"GuardianCI false-positive exclusion: PR #{record['source_pr_number']}"]
+        [
+            "commit",
+            "-m",
+            f"GuardianCI false-positive exclusion: PR #{record['source_pr_number']}",
+        ]
     )
     run_git(["push", "origin", f"HEAD:{branch}"])
     print(f"GuardianCI false-positive exclusion published to {branch}.")
@@ -315,7 +319,13 @@ def post_exclusions_audit(branch: str) -> int:
 
 def load_remote_exclusions(branch: str) -> list[dict[str, Any]]:
     subprocess.run(
-        ["git", "fetch", "--no-tags", "origin", f"{branch}:refs/remotes/origin/{branch}"],
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "origin",
+            f"{branch}:refs/remotes/origin/{branch}",
+        ],
         check=False,
         text=True,
         capture_output=True,
