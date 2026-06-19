@@ -171,6 +171,33 @@ jobs:
       - name: Install AI review dependencies
         run: uv pip install --system google-genai requests
 
+      - name: Install gitleaks
+        run: |
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.22.1/gitleaks_8.22.1_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Secret pre-scan (gitleaks)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }} --no-tags
+          gitleaks detect --source . \
+            --log-opts "origin/${{ github.base_ref }}..HEAD" \
+            --no-banner \
+            --exit-code 0 \
+            --report-format json \
+            --report-path gitleaks-report.json 2>&1 || true
+          if [ -s gitleaks-report.json ]; then
+            COUNT=$(python3 -c "
+          import json, sys
+          data = json.load(open('gitleaks-report.json'))
+          print(len(data) if isinstance(data, list) else 0)
+          " 2>/dev/null || echo "some")
+            echo "::warning::Gitleaks found ${COUNT} potential secret(s) in this PR — Gemini review will also report these as CRITICAL findings"
+            cat gitleaks-report.json
+          fi
+
       - name: Run Gemini security review
         id: ai-review
         env:

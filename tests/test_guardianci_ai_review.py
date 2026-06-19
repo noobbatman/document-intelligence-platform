@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "guardianci_ai_review.py"
 SPEC = importlib.util.spec_from_file_location("guardianci_ai_review", SCRIPT_PATH)
 assert SPEC is not None and SPEC.loader is not None
@@ -847,3 +849,114 @@ def test_finding_matches_exclusion_empty_exclusion_hash_skips_hash_check() -> No
 
     assert review.finding_matches_exclusion(finding, [exclusion], "any-hash") is True
     assert review.finding_matches_exclusion(finding, [exclusion], "") is True
+
+
+# ── Phase 8: cost controls ────────────────────────────────────────────────────
+
+
+def _make_patch(path: str, added_lines: int) -> tuple[str, str]:
+    added = "\n".join(f"+line {i}" for i in range(added_lines))
+    return path, f"@@ -1,0 +1,{added_lines} @@\n{added}"
+
+
+def test_count_diff_lines_counts_only_added_lines() -> None:
+    patches = [
+        _make_patch("app/api.py", 50),
+        _make_patch("app/db/models.py", 30),
+    ]
+    assert review.count_diff_lines(patches) == 80
+
+
+def test_count_diff_lines_excludes_header_and_context_lines() -> None:
+    patch = (
+        "app/api.py",
+        "@@ -1,3 +1,4 @@\n"
+        " context line\n"
+        "+added line\n"
+        "-removed line\n"
+        "+++ b/app/api.py\n",
+    )
+    assert review.count_diff_lines([patch]) == 1
+
+
+def test_partition_patches_by_risk_puts_high_risk_first() -> None:
+    patches = [
+        ("app/api/routes.py", "patch"),
+        ("README.md", "patch"),
+        ("app/core/config.py", "patch"),
+        ("Makefile", "patch"),
+    ]
+
+    high, low = review.partition_patches_by_risk(patches)
+
+    assert {p for p, _ in high} == {"app/api/routes.py", "app/core/config.py"}
+    assert {p for p, _ in low} == {"README.md", "Makefile"}
+
+
+def test_estimate_gemini_cost_flash_pricing() -> None:
+    cost = review.estimate_gemini_cost(1_000_000, 0, "gemini-2.0-flash")
+    assert abs(cost - 0.075) < 1e-6
+
+
+def test_estimate_gemini_cost_gemma_is_free() -> None:
+    cost = review.estimate_gemini_cost(100_000, 50_000, "gemma-4-31b-it")
+    assert cost == 0.0
+
+
+def test_estimate_gemini_cost_unknown_model_uses_flash_default() -> None:
+    cost = review.estimate_gemini_cost(1_000_000, 0, "some-unknown-model")
+    assert cost == pytest.approx(0.075, rel=1e-4)
+
+
+def test_write_review_result_includes_cost_and_large_diff_fields(tmp_path) -> None:
+    import json
+
+    result_path = str(tmp_path / "result.json")
+    context = {"pr_number": 1, "pr_url": "https://github.com/r/p/pulls/1", "head_sha": "abc123"}
+
+    review.write_review_result(
+        result_path,
+        context,
+        [],
+        [],
+        truncated=False,
+        gemini_ran=True,
+        status="completed",
+        model="gemma-4-31b-it",
+        large_diff=True,
+        skipped_files=["README.md", "docs/guide.md"],
+        gemini_usage={"input_tokens": 1200, "output_tokens": 400, "cost_usd": 0.000023},
+        sha_deduplicated=False,
+    )
+
+    payload = json.loads(open(result_path).read())
+    assert payload["large_diff"] is True
+    assert payload["skipped_file_count"] == 2
+    assert payload["gemini_input_tokens"] == 1200
+    assert payload["gemini_output_tokens"] == 400
+    assert payload["gemini_cost_usd"] == pytest.approx(0.000023)
+    assert payload["sha_deduplicated"] is False
+
+
+def test_write_review_result_omits_cost_fields_when_no_usage(tmp_path) -> None:
+    import json
+
+    result_path = str(tmp_path / "result.json")
+    context = {"pr_number": 2, "pr_url": "", "head_sha": "def456"}
+
+    review.write_review_result(
+        result_path,
+        context,
+        [],
+        [],
+        truncated=False,
+        gemini_ran=False,
+        status="completed",
+        model="gemma-4-31b-it",
+    )
+
+    payload = json.loads(open(result_path).read())
+    assert "gemini_input_tokens" not in payload
+    assert "gemini_cost_usd" not in payload
+    assert payload["large_diff"] is False
+    assert payload["skipped_file_count"] == 0

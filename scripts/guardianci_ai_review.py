@@ -26,6 +26,19 @@ MAX_DIFF_CHARS = 8000
 MAX_INLINE_COMMENTS = 25
 MAX_AUTOFIX_FINDINGS = 3
 FIX_CONTEXT_RADIUS = 40
+LARGE_DIFF_LINE_THRESHOLD = 600
+
+# Approximate USD per 1M tokens (input / output) by model family.
+# Used only for cost-logging estimates; not billing.
+_GEMINI_PRICING: dict[str, tuple[float, float]] = {
+    "gemini-2.0-flash": (0.075, 0.30),
+    "gemini-2.0-flash-lite": (0.0375, 0.15),
+    "gemini-1.5-flash": (0.075, 0.30),
+    "gemini-1.5-pro": (1.25, 5.00),
+    "gemini-1.0-pro": (0.50, 1.50),
+    # Gemma models served via AI Studio are free-tier; record $0 for transparency.
+    "gemma": (0.0, 0.0),
+}
 ALLOWED_SEVERITIES = {"CRITICAL", "WARN", "INFO"}
 SEVERITY_ORDER = ("CRITICAL", "WARN", "INFO")
 ALLOWED_REMEDIATION_URGENCIES = {"before-merge", "within-sprint", "backlog"}
@@ -156,10 +169,30 @@ def main() -> int:
         file_patches = split_file_patches(diff_text)
         relevant_patches = select_review_patches(file_patches)
         changed_lines = changed_new_lines(relevant_patches)
-        review_diff, truncated = truncate_diff(relevant_patches, args.max_diff_chars)
         exclusions = load_false_positive_exclusions(args.exclusions_branch)
         added_line_hashes = added_context_hashes(relevant_patches)
+
+        # Large-diff cost control: if the PR touches > LARGE_DIFF_LINE_THRESHOLD added
+        # lines, only send high-risk files to Gemini and note the rest in the prompt.
+        diff_lines = count_diff_lines(relevant_patches)
+        large_diff = diff_lines > LARGE_DIFF_LINE_THRESHOLD
+        if large_diff:
+            high_risk_patches, skipped_patches = partition_patches_by_risk(relevant_patches)
+            skipped_files = [path for path, _ in skipped_patches]
+            gemini_patches = high_risk_patches if high_risk_patches else relevant_patches
+            print(
+                f"GuardianCI large-diff mode: {diff_lines} added lines. "
+                f"Sending {len(gemini_patches)} high-risk file(s) to Gemini; "
+                f"skipping {len(skipped_files)} lower-risk file(s)."
+            )
+        else:
+            gemini_patches = relevant_patches
+            skipped_files = []
+
+        # Run local pattern detection on ALL patches (free, no API cost).
         local_findings = local_security_findings(relevant_patches, exclusions)
+
+        review_diff, truncated = truncate_diff(gemini_patches, args.max_diff_chars)
 
         if not review_diff.strip():
             write_review_result(
@@ -171,6 +204,8 @@ def main() -> int:
                 gemini_ran=False,
                 status="no_relevant_files",
                 model=args.model,
+                large_diff=large_diff,
+                skipped_files=skipped_files,
             )
             if not args.auto_fix_only:
                 post_review(
@@ -183,20 +218,37 @@ def main() -> int:
                 print("GuardianCI auto-fix found no security-relevant changed files.")
             return 0
 
+        gemini_usage: dict[str, Any] = {}
+        sha_deduplicated = False
+
         if not truthy(args.gemini_enabled):
             findings = local_findings
             validation_errors: list[str] = []
             gemini_ran = False
         else:
-            raw_response = call_gemini(
-                review_diff,
-                truncated=truncated,
-                model=args.model,
-                exclusions=exclusions,
-            )
-            findings, validation_errors = validate_findings(raw_response, changed_lines)
-            findings = merge_findings(local_findings, findings)
-            gemini_ran = True
+            # SHA deduplication: skip Gemini if this exact commit was already reviewed.
+            head_sha = context.get("head_sha", "")
+            if sha_already_reviewed(head_sha, args.exclusions_branch):
+                print(
+                    f"GuardianCI: SHA {head_sha[:12]} was already reviewed on a previous run. "
+                    "Skipping Gemini API call to avoid duplicate quota usage."
+                )
+                findings = local_findings
+                validation_errors = []
+                gemini_ran = False
+                sha_deduplicated = True
+            else:
+                raw_response, gemini_usage = call_gemini(
+                    review_diff,
+                    truncated=truncated,
+                    model=args.model,
+                    exclusions=exclusions,
+                    skipped_files=skipped_files,
+                )
+                findings, validation_errors = validate_findings(raw_response, changed_lines)
+                findings = merge_findings(local_findings, findings)
+                gemini_ran = True
+
         findings = filter_excluded_findings(findings, exclusions, added_line_hashes)
     except json.JSONDecodeError as exc:
         write_review_result(
@@ -278,6 +330,10 @@ def main() -> int:
         gemini_ran=gemini_ran,
         status="completed",
         model=args.model,
+        large_diff=large_diff,
+        skipped_files=skipped_files,
+        gemini_usage=gemini_usage,
+        sha_deduplicated=sha_deduplicated,
     )
     if args.auto_fix_only:
         if not critical_findings:
@@ -443,6 +499,67 @@ def select_review_patches(file_patches: list[tuple[str, str]]) -> list[tuple[str
         [(path, patch) for path, patch in file_patches if is_reviewable_path(path)],
         key=lambda item: review_priority(item[0]),
     )
+
+
+def count_diff_lines(patches: list[tuple[str, str]]) -> int:
+    """Count added lines across all patches (the diff size the LLM would see)."""
+    return sum(
+        1
+        for _path, patch in patches
+        for line in patch.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
+def is_high_risk_path(path: str) -> bool:
+    lowered = path.lower()
+    return any(lowered.startswith(prefix) for prefix in HIGH_RISK_PREFIXES)
+
+
+def partition_patches_by_risk(
+    patches: list[tuple[str, str]],
+) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
+    """Split patches into (high-risk, lower-risk). High-risk paths are always sent to Gemini."""
+    high: list[tuple[str, str]] = []
+    low: list[tuple[str, str]] = []
+    for path, patch in patches:
+        (high if is_high_risk_path(path) else low).append((path, patch))
+    return high, low
+
+
+def sha_already_reviewed(sha: str, branch: str) -> bool:
+    """Return True if this commit SHA already has a review record on the metrics branch."""
+    if not sha:
+        return False
+    sha_short = sha[:12]
+    subprocess.run(
+        ["git", "fetch", "--no-tags", "origin", f"{branch}:refs/remotes/origin/{branch}"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", f"origin/{branch}", "reviews/"],
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        return False
+    return any(
+        sha_short in entry for entry in result.stdout.splitlines() if entry.endswith(".json")
+    )
+
+
+def estimate_gemini_cost(input_tokens: int, output_tokens: int, model: str) -> float:
+    """Return an estimated USD cost for one Gemini call. Intended for logging only."""
+    model_lower = model.lower()
+    rates = next(
+        (rates for prefix, rates in _GEMINI_PRICING.items() if model_lower.startswith(prefix)),
+        (0.075, 0.30),  # default to Flash pricing when model is unrecognised
+    )
+    input_usd_per_m, output_usd_per_m = rates
+    return (input_tokens * input_usd_per_m + output_tokens * output_usd_per_m) / 1_000_000
 
 
 def truncate_diff(patches: list[tuple[str, str]], max_chars: int) -> tuple[str, bool]:
@@ -750,7 +867,8 @@ def call_gemini(
     truncated: bool,
     model: str,
     exclusions: list[FalsePositiveExclusion] | None = None,
-) -> Any:
+    skipped_files: list[str] | None = None,
+) -> tuple[Any, dict[str, Any]]:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set.")
@@ -764,7 +882,12 @@ def call_gemini(
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=model,
-        contents=user_prompt(diff_text, truncated=truncated, exclusions=exclusions or []),
+        contents=user_prompt(
+            diff_text,
+            truncated=truncated,
+            exclusions=exclusions or [],
+            skipped_files=skipped_files or [],
+        ),
         config=types.GenerateContentConfig(
             system_instruction=system_prompt(),
             response_mime_type="application/json",
@@ -772,7 +895,24 @@ def call_gemini(
             max_output_tokens=4096,
         ),
     )
-    return parse_json_response(response.text or "")
+
+    usage: dict[str, Any] = {}
+    um = getattr(response, "usage_metadata", None)
+    if um is not None:
+        input_tokens = int(getattr(um, "prompt_token_count", 0) or 0)
+        output_tokens = int(getattr(um, "candidates_token_count", 0) or 0)
+        cost_usd = estimate_gemini_cost(input_tokens, output_tokens, model)
+        usage = {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": round(cost_usd, 6),
+        }
+        print(
+            f"GuardianCI Gemini usage: {input_tokens} input tokens, "
+            f"{output_tokens} output tokens, ~${cost_usd:.6f} estimated cost"
+        )
+
+    return parse_json_response(response.text or ""), usage
 
 
 def system_prompt() -> str:
@@ -790,12 +930,22 @@ def user_prompt(
     *,
     truncated: bool,
     exclusions: list[FalsePositiveExclusion] | None = None,
+    skipped_files: list[str] | None = None,
 ) -> str:
     truncation_note = (
         "The diff was truncated to fit the review budget; mention only findings visible below.\n"
         if truncated
         else ""
     )
+    skipped = skipped_files or []
+    if skipped:
+        file_list = ", ".join(skipped[:20])
+        extra = f" (+{len(skipped) - 20} more)" if len(skipped) > 20 else ""
+        truncation_note += (
+            f"Large-diff mode: {len(skipped)} lower-priority file(s) were excluded to stay "
+            f"within the token budget — {file_list}{extra}. "
+            "Focus only on the high-risk files shown below.\n"
+        )
     exclusion_note = format_false_positive_exclusions(exclusions or [])
     exclusion_block = f"\n\n{exclusion_note}\n" if exclusion_note else ""
     return f"""
@@ -1057,10 +1207,14 @@ def write_review_result(
     gemini_ran: bool,
     status: str,
     model: str | None = None,
+    large_diff: bool = False,
+    skipped_files: list[str] | None = None,
+    gemini_usage: dict[str, Any] | None = None,
+    sha_deduplicated: bool = False,
 ) -> None:
     critical = sum(1 for finding in findings if finding.severity == "CRITICAL")
     warn = sum(1 for finding in findings if finding.severity == "WARN")
-    payload = {
+    payload: dict[str, Any] = {
         "schema_version": 1,
         "pr_number": context.get("pr_number"),
         "pr_url": context.get("pr_url"),
@@ -1070,12 +1224,19 @@ def write_review_result(
         "model": model or os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
         "gemini_ran": gemini_ran,
         "truncated": truncated,
+        "large_diff": large_diff,
+        "skipped_file_count": len(skipped_files) if skipped_files else 0,
+        "sha_deduplicated": sha_deduplicated,
         "findings": [finding_to_dict(finding) for finding in findings],
         "validation_errors": validation_errors,
         "total_critical": critical,
         "total_warn": warn,
         "score": security_score(findings),
     }
+    if gemini_usage:
+        payload["gemini_input_tokens"] = gemini_usage.get("input_tokens", 0)
+        payload["gemini_output_tokens"] = gemini_usage.get("output_tokens", 0)
+        payload["gemini_cost_usd"] = gemini_usage.get("cost_usd", 0.0)
     Path(path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
 
 
